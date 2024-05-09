@@ -1,0 +1,11 @@
+[package]
+name = "semsan"
+version = "0.1.0"
+authors = ["Niklas Goegge <niklas@brink.dev>"]
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.3.0", features = ["derive", "string"] }
+libafl = "0.12.0"
+libafl_bolts = "0.12.0"
+serde = "1.0.200"

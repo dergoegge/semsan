@@ -1,0 +1,64 @@
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+pub struct Options {
+    #[arg(
+        long = "debug-children",
+        help = "Redirect the executors' std{out,err} to SemSan's std{out,err}. Useful for debugging solutions and harnesses."
+    )]
+    pub debug: bool,
+    #[arg(
+        long = "timeout",
+        help = "Maximum amount of time a single input is allowed to run (in milliseconds per executor).",
+        default_value_t = 1000
+    )]
+    pub timeout: u64,
+    #[arg(
+        long = "log-diff-values",
+        help = "Print the differential value of both exectuors when a solution is found."
+    )]
+    pub log_diff_values: bool,
+    #[arg(
+        long = "ignore-solutions",
+        help = "Keep fuzzing even if a solution has already been found"
+    )]
+    pub ignore_solutions: bool,
+    #[arg(
+        long = "solution-exit-code",
+        help = "Exit code for solutions",
+        default_value_t = 71
+    )]
+    pub solution_exit_code: u8,
+
+    #[arg(
+        long = "foreign-corpus",
+        help = "Foreign fuzzer corpus to pull in inputs from"
+    )]
+    pub foreign_corpus: Option<String>,
+    #[arg(
+        long = "foreign-sync-interval",
+        help = "Interval for syncing the foreign fuzzer corpus (in seconds)",
+        default_value_t = 10
+    )]
+    pub foreign_sync_interval: u64,
+
+    #[arg(long = "seeds", help = "Seed corpus directory", required = true)]
+    pub seeds: String,
+
+    #[arg(
+        long = "solutions",
+        help = "Directory in which solutions (differential finds) will be stored",
+        required = true
+    )]
+    pub solutions: String,
+    #[arg(
+        help = "Path to the binary of the primary harness to fuzz",
+        required = true
+    )]
+    pub primary: String,
+    #[arg(
+        help = "Path to the binary of the secondary harness to fuzz",
+        required = true
+    )]
+    pub secondary: String,
+}
