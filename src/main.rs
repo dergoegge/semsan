@@ -36,7 +36,7 @@ use libafl_bolts::{
 
 use crate::corpus_syncer::CorpusSyncer;
 use crate::observers::ShMemDifferentialValueObserver;
-use crate::options::Options;
+use crate::options::{Comparator, Options};
 
 const DIFFERENTIAL_VALUE_SHMEM_ID_ENV: &str = "DIFFERENTIAL_VALUE_SHMEM_ID";
 const MAX_DIFFERENTIAL_VALUE_SIZE: usize = 32;
@@ -74,6 +74,15 @@ fn main() -> std::process::ExitCode {
             )
         });
 
+    let compare_fn = match opts.comparator {
+        // Targets behave the same if the outputs are equal
+        Comparator::Equal => |output1: &[u8], output2: &[u8]| output1 == output2,
+        // Targets behave the same if the primary output is less than the secondary output
+        Comparator::LessThan => |output1: &[u8], output2: &[u8]| output1 < output2,
+        // Targets behave the same if the primary output is less than or equal to the secondary output
+        Comparator::LessThanOrEqual => |output1: &[u8], output2: &[u8]| output1 <= output2,
+    };
+
     // Both observers are combined into a `DiffFeedback` that compares the retrieved values from
     // the two observers described above.
     let mut objective = DiffFeedback::new(
@@ -81,7 +90,7 @@ fn main() -> std::process::ExitCode {
         &primary_diff_value_observer,
         &secondary_diff_value_observer,
         |o1, o2| {
-            if o1.last_value() == o2.last_value() {
+            if compare_fn(o1.last_value(), o2.last_value()) {
                 DiffResult::Equal
             } else {
                 if opts.log_diff_values {

@@ -1,4 +1,12 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+
+#[derive(ValueEnum, Debug, Clone)]
+pub enum Comparator {
+    Equal,
+    LessThan,
+    LessThanOrEqual,
+}
+// TODO: Allow custom comparators
 
 #[derive(Parser, Debug)]
 pub struct Options {
@@ -18,6 +26,13 @@ pub struct Options {
         help = "Print the differential value of both exectuors when a solution is found."
     )]
     pub log_diff_values: bool,
+    #[arg(
+        long = "comparator",
+        help = "Choose differential value comparator function",
+        value_enum,
+        default_value_t = Comparator::Equal
+    )]
+    pub comparator: Comparator,
     #[arg(
         long = "ignore-solutions",
         help = "Keep fuzzing even if a solution has already been found"
