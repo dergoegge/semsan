@@ -65,7 +65,12 @@ where
         }
 
         let corpus_size = state.corpus().count();
-        for entry in std::fs::read_dir(dir).unwrap() {
+
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+
+        for entry in entries {
             let entry = entry.unwrap();
             let path = entry.path();
             if entry.metadata().map_or(true, |m| !m.is_file())
