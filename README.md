@@ -44,10 +44,10 @@ memory, it is not persisted to disk. Inputs that trigger semantic differences
 are written to disk.
 
 At the moment, SemSan only supports afl style fork server executors and targets
-are therefore required to be build with `afl-clang-{fast,lto,fast++,lto++}`. In
-the future, the aim is to support a variety of executors such as emulation
-based executors (e.g. via `libafl_qemu`) and snapshot based executors (e.g.
-full-system `libafl_qemu` or `nyx`).
+are therefore required to be build with `afl-clang-{fast,lto,fast++,lto++}` or
+`afl-{gcc,g++}-fast`. In the future, the aim is to support a variety of
+executors such as emulation based executors (e.g. via `libafl_qemu`) and
+snapshot based executors (e.g. full-system `libafl_qemu` or `nyx`).
 
 ## Usage
 
