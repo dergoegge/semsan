@@ -83,6 +83,15 @@ Options:
           Print help
 ```
 
+### Comparators
+
+By default SemSan will check for equality when comparing the observed output
+values but that is configurable with the `--comparator` option. Currently, the
+only supported comparators are `equal`, `less-than` and `less-than-or-equal`.
+
+Using comparators other than `equal` can be useful when the harnesses under
+test are allowed to behave differently to some extend.
+
 ### Ensembling with other engines
 
 SemSan is not meant to be used in isolation as it is quite a primitive fuzzer
