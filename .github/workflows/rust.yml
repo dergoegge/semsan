@@ -21,3 +21,17 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
 
+# build-qemu:
+#
+#   runs-on: ubuntu-latest
+#
+#   steps:
+#   - uses: actions/checkout@v4
+#   - name: Install deps
+#     run: |
+#       sudo apt update && sudo apt upgrade && sudo apt install ninja-build -y
+#       wget https://apt.llvm.org/llvm.sh
+#       chmod +x llvm.sh
+#       sudo ./llvm.sh 18 all
+#   - name: Build
+#     run: cargo build --verbose --features qemu_x86_64

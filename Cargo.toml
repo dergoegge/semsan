@@ -4,12 +4,31 @@ version = "0.1.0"
 authors = ["Niklas Goegge <niklas@brink.dev>"]
 edition = "2021"
 
+[features]
+qemu = []
+qemu_be = ["qemu", "libafl_qemu/be", "dep:libafl_qemu"]
+# These are mutually exclusive: SemSan can only be compiled to support one
+# libafl_qemu architecture at a time.
+qemu_x86_64 = ["qemu", "libafl_qemu/x86_64", "dep:libafl_qemu"]   # amd64
+qemu_aarch64 = ["qemu", "libafl_qemu/aarch64", "dep:libafl_qemu"] # arm64
+
 [dependencies]
 clap = { version = "4.3.0", features = ["derive", "string"] }
 libafl = "0.13.1"
 libafl_bolts = "0.13.1"
+libafl_qemu = { version = "0.13.1", features = ["usermode"], optional = true }
 serde = "1.0.200"
 
 [[bin]]
 name = "semsan"
 path = "src/main.rs"
+
+[[bin]]
+name = "semsan-x86_64"
+path = "src/main.rs"
+required-features = ["qemu_x86_64"]
+
+[[bin]]
+name = "semsan-aarch64"
+path = "src/main.rs"
+required-features = ["qemu_aarch64"]

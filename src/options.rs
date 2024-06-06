@@ -102,6 +102,13 @@ pub struct Options {
         default_value_t = 71
     )]
     pub solution_exit_code: u8,
+    #[cfg(feature = "qemu")]
+    #[arg(
+        long = "qemu-entry",
+        help = "Symbol for the qemu entry breakpoint",
+        default_value = "LLVMFuzzerTestOneInput"
+    )]
+    pub qemu_entry: String,
     #[command(subcommand)]
     pub command: Command,
     #[arg(

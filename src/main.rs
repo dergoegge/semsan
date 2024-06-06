@@ -4,18 +4,19 @@ mod options;
 
 use clap::Parser;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use libafl::{
     corpus::{Corpus, HasTestcase, InMemoryCorpus, OnDiskCorpus, Testcase},
     events::{ProgressReporter, SimpleEventManager},
-    executors::{DiffExecutor, ForkserverExecutor},
+    executors::{DiffExecutor, ExitKind, ForkserverExecutor},
     feedbacks::{
         differential::{DiffFeedback, DiffResult},
         MaxMapFeedback,
     },
-    inputs::{BytesInput, HasMutatorBytes, Input},
+    inputs::{BytesInput, HasMutatorBytes, HasTargetBytes, Input},
     monitors::SimplePrintingMonitor,
     mutators::{
         havoc_mutations, havoc_mutations_no_crossover, StdMOptMutator, StdScheduledMutator,
@@ -34,6 +35,12 @@ use libafl_bolts::{
     rands::StdRand,
     shmem::{ShMem, ShMemProvider, UnixShMemProvider},
     tuples::tuple_list,
+    AsSlice,
+};
+#[cfg(feature = "qemu")]
+use libafl_qemu::{
+    edges::QemuEdgeCoverageClassicHelper, elf::EasyElf, ArchExtras, CallingConvention, GuestAddr,
+    GuestReg, MmapPerms, Qemu, QemuExecutor, QemuHooks, Regs,
 };
 
 use corpus_syncer::CorpusSyncer;
@@ -42,11 +49,50 @@ use options::{Command, Comparator, Options};
 
 const CHARACTERIZATION_SHMEM_ID_ENV: &str = "SEMSAN_CHARACTERIZATION_SHMEM_ID";
 const MAX_CHARACTERIZATION_SHMEM_SIZE: usize = 32;
+const MAX_INPUT_SIZE: usize = 1_048_576;
+
+#[cfg(feature = "qemu")]
+fn setup_qemu(entry: &str) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr) {
+    let mut qemu_args = Vec::new();
+    qemu_args.insert(0, String::from("examples/arch/arch-arm64"));
+    qemu_args.insert(0, String::from("semsan"));
+
+    // Setup QEMU
+    let mut env: HashMap<String, String> = std::env::vars().collect();
+    env.remove("LD_LIBRARY_PATH");
+    let env: Vec<(String, String)> = env.drain().collect();
+    let emu = Qemu::init(qemu_args.as_slice(), env.as_slice()).unwrap();
+
+    let mut elf_buffer = Vec::new();
+    let elf = EasyElf::from_file(emu.binary_path(), &mut elf_buffer).unwrap();
+
+    let test_one_input_ptr = elf
+        .resolve_symbol(entry, emu.load_addr())
+        .expect(&format!("Symbol {} not found", entry));
+
+    // Emulate until `LLVMFuzzerTestOneInput` is hit
+    emu.entry_break(test_one_input_ptr);
+
+    let pc: GuestReg = emu.read_reg(Regs::Pc).unwrap();
+    let stack_ptr: GuestAddr = emu.read_reg(Regs::Sp).unwrap();
+    let ret_addr: GuestAddr = emu.read_return_address().unwrap();
+
+    emu.set_breakpoint(ret_addr);
+
+    let input_addr = emu
+        .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
+        .unwrap();
+
+    (emu, pc, stack_ptr, ret_addr, input_addr)
+}
 
 fn main() -> std::process::ExitCode {
     let opts = Options::parse();
 
     const MAX_MAP_SIZE: usize = 2_621_440;
+    #[cfg(feature = "qemu")]
+    const QEMU_MAP_SIZE: usize = 65_535;
+
     std::env::set_var("AFL_MAP_SIZE", format!("{}", MAX_MAP_SIZE));
 
     let mut shmem_provider = UnixShMemProvider::new().unwrap();
@@ -75,6 +121,9 @@ fn main() -> std::process::ExitCode {
                 MAX_CHARACTERIZATION_SHMEM_SIZE,
             )
         });
+
+    #[cfg(feature = "qemu")]
+    let (emulator, pc, stack_ptr, ret_addr, input_addr) = setup_qemu(&opts.qemu_entry);
 
     let compare_fn = match opts.comparator {
         // Targets behave the same if the outputs are not equal
@@ -154,6 +203,7 @@ fn main() -> std::process::ExitCode {
         )
         .unwrap();
 
+    #[cfg(not(feature = "qemu"))]
     let secondary_executor = ForkserverExecutor::builder()
         .program(PathBuf::from(&opts.secondary))
         .debug_child(opts.debug)
@@ -176,17 +226,59 @@ fn main() -> std::process::ExitCode {
         )
         .unwrap();
 
+    #[cfg(feature = "qemu")]
+    let mut secondary_qemu_harness = |input: &BytesInput| {
+        let target = input.target_bytes();
+        let mut buf = target.as_slice();
+        let mut len = buf.len();
+        if len > MAX_INPUT_SIZE {
+            buf = &buf[0..MAX_INPUT_SIZE];
+            len = MAX_INPUT_SIZE;
+        }
+        let len = len as GuestReg;
+
+        unsafe {
+            emulator.write_mem(input_addr, buf);
+            emulator.write_reg(Regs::Pc, pc).unwrap();
+            emulator.write_reg(Regs::Sp, stack_ptr).unwrap();
+            emulator.write_return_address(ret_addr).unwrap();
+            emulator
+                .write_function_argument(CallingConvention::Cdecl, 0, input_addr)
+                .unwrap();
+            emulator
+                .write_function_argument(CallingConvention::Cdecl, 1, len)
+                .unwrap();
+            // TODO handle emulation results?
+            let _ = emulator.run();
+        }
+
+        ExitKind::Ok
+    };
+
+    #[cfg(feature = "qemu")]
+    let mut hooks = QemuHooks::new(
+        emulator.clone(),
+        // TODO: The classic helper is needed for StdMapObserver.
+        tuple_list!(QemuEdgeCoverageClassicHelper::default(),),
+    );
+
     match &opts.command {
         Command::Fuzz(fuzz_opts) => {
             // Resize the coverage maps according to the dynamic map size determined by the executors
             coverage_maps[0].truncate(primary_executor.coverage_map_size().unwrap());
 
-            let secondary_map_size = if fuzz_opts.no_secondary_coverage {
-                0
-            } else {
-                secondary_executor.coverage_map_size().unwrap()
+            #[cfg(feature = "qemu")]
+            if !fuzz_opts.no_secondary_coverage {
+                coverage_maps[1].truncate(QEMU_MAP_SIZE);
             };
-            coverage_maps[1].truncate(secondary_map_size);
+            #[cfg(not(feature = "qemu"))]
+            if !fuzz_opts.no_secondary_coverage {
+                coverage_maps[1].truncate(secondary_executor.coverage_map_size().unwrap());
+            };
+
+            if fuzz_opts.no_secondary_coverage {
+                coverage_maps[1].truncate(0);
+            }
 
             // Combine both coverage maps as feedback
             let diff_map_observer = HitcountsIterableMapObserver::new(
@@ -212,6 +304,20 @@ fn main() -> std::process::ExitCode {
             );
             let mut fuzzer = StdFuzzer::new(scheduler, coverage_feedback, objective);
 
+            let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
+
+            #[cfg(feature = "qemu")]
+            let secondary_executor = QemuExecutor::new(
+                &mut hooks,
+                &mut secondary_qemu_harness,
+                tuple_list!(secondary_map_observer, secondary_diff_value_observer),
+                &mut fuzzer,
+                &mut state,
+                &mut mgr,
+                Duration::from_millis(opts.timeout),
+            )
+            .unwrap();
+
             // Combine the primary and secondary executor into a `DiffExecutor`.
             let mut executor = DiffExecutor::new(
                 primary_executor,
@@ -222,7 +328,6 @@ fn main() -> std::process::ExitCode {
             let mut corpus_syncer =
                 CorpusSyncer::new(Duration::from_secs(fuzz_opts.foreign_sync_interval));
 
-            let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
             corpus_syncer.sync(
                 &mut state,
                 &mut fuzzer,
@@ -280,13 +385,25 @@ fn main() -> std::process::ExitCode {
             )
             .unwrap();
 
-            // Combine the primary and secondary executor into a `DiffExecutor`.
-            let mut executor =
-                DiffExecutor::new(primary_executor, secondary_executor, tuple_list!());
-
             let mut fuzzer = StdFuzzer::new(QueueScheduler::new(), (), ());
 
             let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
+
+            #[cfg(feature = "qemu")]
+            let secondary_executor = QemuExecutor::new(
+                &mut hooks,
+                &mut secondary_qemu_harness,
+                tuple_list!(secondary_map_observer, secondary_diff_value_observer),
+                &mut fuzzer,
+                &mut state,
+                &mut mgr,
+                Duration::from_millis(opts.timeout),
+            )
+            .unwrap();
+
+            // Combine the primary and secondary executor into a `DiffExecutor`.
+            let mut executor =
+                DiffExecutor::new(primary_executor, secondary_executor, tuple_list!());
 
             let input = BytesInput::from_file(PathBuf::from(&min_opts.solution)).unwrap();
             let size = input.bytes().len();
