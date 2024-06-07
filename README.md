@@ -73,6 +73,8 @@ Options:
           Foreign fuzzer corpus to pull in inputs from
       --foreign-sync-interval <FOREIGN_SYNC_INTERVAL>
           Interval for syncing the foreign fuzzer corpus (in seconds) [default: 10]
+      --no-secondary-coverage
+          Don't collect coverage feedback for the secondary executor
       --seeds <SEEDS>
           Seed corpus directory
       --solutions <SOLUTIONS>

@@ -52,6 +52,13 @@ pub struct Options {
     )]
     pub foreign_sync_interval: u64,
 
+    #[arg(
+        long = "no-secondary-coverage",
+        help = "Don't collect coverage feedback for the secondary executor",
+        default_value_t = false
+    )]
+    pub no_secondary_coverage: bool,
+
     #[arg(long = "seeds", help = "Seed corpus directory", required = true)]
     pub seeds: String,
 

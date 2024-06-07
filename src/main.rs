@@ -170,7 +170,13 @@ fn main() -> std::process::ExitCode {
 
     // Resize the coverage maps according to the dynamic map size determined by the executors
     coverage_maps[0].truncate(primary_executor.coverage_map_size().unwrap());
-    coverage_maps[1].truncate(secondary_executor.coverage_map_size().unwrap());
+
+    let secondary_map_size = if opts.no_secondary_coverage {
+        0
+    } else {
+        secondary_executor.coverage_map_size().unwrap()
+    };
+    coverage_maps[1].truncate(secondary_map_size);
 
     // Combine both coverage maps as feedback
     let diff_map_observer = HitcountsIterableMapObserver::new(MultiMapObserver::differential(
