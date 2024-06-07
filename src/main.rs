@@ -93,11 +93,9 @@ fn main() -> std::process::ExitCode {
             if compare_fn(o1.last_value(), o2.last_value()) {
                 DiffResult::Equal
             } else {
-                if opts.log_diff_values {
-                    eprintln!("== ERROR: Semantic Difference");
-                    eprintln!("primary  : {:?}", o1.last_value());
-                    eprintln!("secondary: {:?}", o2.last_value());
-                }
+                eprintln!("== ERROR: Semantic Difference");
+                eprintln!("primary  : {:?}", o1.last_value());
+                eprintln!("secondary: {:?}", o2.last_value());
 
                 DiffResult::Diff
             }

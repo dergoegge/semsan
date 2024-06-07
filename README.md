@@ -63,8 +63,6 @@ Options:
           Redirect the executors' std{out,err} to SemSan's std{out,err}. Useful for debugging solutions and harnesses.
       --timeout <TIMEOUT>
           Maximum amount of time a single input is allowed to run (in milliseconds per executor). [default: 1000]
-      --log-diff-values
-          Print the differential value of both exectuors when a solution is found.
       --comparator <COMPARATOR>
           Choose differential value comparator function [default: equal] [possible values: equal, less-than, less-than-or-equal]
       --ignore-solutions

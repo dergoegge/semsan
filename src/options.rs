@@ -22,11 +22,6 @@ pub struct Options {
     )]
     pub timeout: u64,
     #[arg(
-        long = "log-diff-values",
-        help = "Print the differential value of both exectuors when a solution is found."
-    )]
-    pub log_diff_values: bool,
-    #[arg(
         long = "comparator",
         help = "Choose differential value comparator function",
         value_enum,
