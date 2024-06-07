@@ -81,6 +81,10 @@ fn main() -> std::process::ExitCode {
         Comparator::LessThan => |output1: &[u8], output2: &[u8]| output1 < output2,
         // Targets behave the same if the primary output is less than or equal to the secondary output
         Comparator::LessThanOrEqual => |output1: &[u8], output2: &[u8]| output1 <= output2,
+        // Targets behave the same if the primary output is greater than the secondary output
+        Comparator::GreaterThan => |output1: &[u8], output2: &[u8]| output1 > output2,
+        // Targets behave the same if the primary output is greater than or equal to the secondary output
+        Comparator::GreaterThanOrEqual => |output1: &[u8], output2: &[u8]| output1 >= output2,
     };
 
     // Both observers are combined into a `DiffFeedback` that compares the retrieved values from

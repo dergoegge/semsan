@@ -5,6 +5,8 @@ pub enum Comparator {
     Equal,
     LessThan,
     LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 // TODO: Allow custom comparators
 

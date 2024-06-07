@@ -64,7 +64,7 @@ Options:
       --timeout <TIMEOUT>
           Maximum amount of time a single input is allowed to run (in milliseconds per executor). [default: 1000]
       --comparator <COMPARATOR>
-          Choose differential value comparator function [default: equal] [possible values: equal, less-than, less-than-or-equal]
+          Choose differential value comparator function [default: equal] [possible values: equal, less-than, less-than-or-equal, greater-than, greater-than-or-equal]
       --ignore-solutions
           Keep fuzzing even if a solution has already been found
       --solution-exit-code <SOLUTION_EXIT_CODE>
