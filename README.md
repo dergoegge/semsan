@@ -52,7 +52,12 @@ snapshot based executors (e.g. full-system `libafl_qemu` or `nyx`).
 ## Usage
 
 ```
-Usage: semsan [OPTIONS] --seeds <SEEDS> --solutions <SOLUTIONS> <PRIMARY> <SECONDARY>
+Usage: semsan [OPTIONS] <PRIMARY> <SECONDARY> <COMMAND>
+
+Commands:
+  fuzz      Differentially fuzz the primary and secondary harness
+  minimize  Minimize a solution
+  help      Print this message or the help of the given subcommand(s)
 
 Arguments:
   <PRIMARY>    Path to the binary of the primary harness to fuzz
@@ -65,10 +70,22 @@ Options:
           Maximum amount of time a single input is allowed to run (in milliseconds per executor). [default: 1000]
       --comparator <COMPARATOR>
           Choose differential value comparator function [default: equal] [possible values: equal, less-than, less-than-or-equal, greater-than, greater-than-or-equal]
-      --ignore-solutions
-          Keep fuzzing even if a solution has already been found
       --solution-exit-code <SOLUTION_EXIT_CODE>
           Exit code for solutions [default: 71]
+  -h, --help
+          Print help
+```
+
+### Fuzzing
+
+```
+Differentially fuzz the primary and secondary harness
+
+Usage: semsan <PRIMARY> <SECONDARY> fuzz [OPTIONS] --seeds <SEEDS> --solutions <SOLUTIONS>
+
+Options:
+      --ignore-solutions
+          Keep fuzzing even if a solution has already been found
       --foreign-corpus <FOREIGN_CORPUS>
           Foreign fuzzer corpus to pull in inputs from
       --foreign-sync-interval <FOREIGN_SYNC_INTERVAL>
@@ -81,6 +98,22 @@ Options:
           Directory in which solutions (differential finds) will be stored
   -h, --help
           Print help
+```
+
+### Minimizing Solutions
+
+```
+Minimize a solution
+
+Usage: semsan <PRIMARY> <SECONDARY> minimize [OPTIONS] <SOLUTION> <SOLUTIONS>
+
+Arguments:
+  <SOLUTION>   Path to the solution to minimize
+  <SOLUTIONS>  Directory storing minimized solutions
+
+Options:
+      --iterations <ITERATIONS>  Number of iterations to attempt minimization for [default: 128]
+  -h, --help                     Print help
 ```
 
 ### Comparators

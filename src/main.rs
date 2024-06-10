@@ -8,22 +8,24 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use libafl::{
-    corpus::{Corpus, InMemoryCorpus, OnDiskCorpus},
+    corpus::{Corpus, HasTestcase, InMemoryCorpus, OnDiskCorpus, Testcase},
     events::{ProgressReporter, SimpleEventManager},
     executors::{DiffExecutor, ForkserverExecutor},
     feedbacks::{
         differential::{DiffFeedback, DiffResult},
         MaxMapFeedback,
     },
-    inputs::BytesInput,
+    inputs::{BytesInput, HasMutatorBytes, Input},
     monitors::SimplePrintingMonitor,
-    mutators::{havoc_mutations, StdMOptMutator},
+    mutators::{
+        havoc_mutations, havoc_mutations_no_crossover, StdMOptMutator, StdScheduledMutator,
+    },
     observers::{CanTrack, HitcountsIterableMapObserver, MultiMapObserver, StdMapObserver},
     schedulers::{
         powersched::{PowerQueueScheduler, PowerSchedule},
-        IndexesLenTimeMinimizerScheduler,
+        IndexesLenTimeMinimizerScheduler, QueueScheduler,
     },
-    stages::{CalibrationStage, StdPowerMutationalStage},
+    stages::{CalibrationStage, StdPowerMutationalStage, StdTMinMutationalStage},
     state::{HasCorpus, HasSolutions, StdState},
     Fuzzer, StdFuzzer,
 };
@@ -34,9 +36,9 @@ use libafl_bolts::{
     tuples::tuple_list,
 };
 
-use crate::corpus_syncer::CorpusSyncer;
-use crate::observers::ShMemDifferentialValueObserver;
-use crate::options::{Command, Comparator, Options};
+use corpus_syncer::CorpusSyncer;
+use observers::ShMemDifferentialValueObserver;
+use options::{Command, Comparator, Options};
 
 const DIFFERENTIAL_VALUE_SHMEM_ID_ENV: &str = "DIFFERENTIAL_VALUE_SHMEM_ID";
 const MAX_DIFFERENTIAL_VALUE_SIZE: usize = 32;
@@ -172,11 +174,11 @@ fn main() -> std::process::ExitCode {
         )
         .unwrap();
 
-    // Resize the coverage maps according to the dynamic map size determined by the executors
-    coverage_maps[0].truncate(primary_executor.coverage_map_size().unwrap());
-
     match &opts.command {
         Command::Fuzz(fuzz_opts) => {
+            // Resize the coverage maps according to the dynamic map size determined by the executors
+            coverage_maps[0].truncate(primary_executor.coverage_map_size().unwrap());
+
             let secondary_map_size = if fuzz_opts.no_secondary_coverage {
                 0
             } else {
@@ -215,11 +217,10 @@ fn main() -> std::process::ExitCode {
                 tuple_list!(diff_map_observer),
             );
 
-            let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
-
             let mut corpus_syncer =
                 CorpusSyncer::new(Duration::from_secs(fuzz_opts.foreign_sync_interval));
 
+            let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
             corpus_syncer.sync(
                 &mut state,
                 &mut fuzzer,
@@ -255,6 +256,64 @@ fn main() -> std::process::ExitCode {
                     return std::process::ExitCode::from(opts.solution_exit_code);
                 }
             }
+        }
+
+        Command::Minimize(min_opts) => {
+            let mut state = StdState::new(
+                StdRand::with_seed(libafl_bolts::current_nanos()),
+                InMemoryCorpus::<BytesInput>::new(),
+                // Only supplied to make rust's type system happy, ideally this would just be a
+                // in-memory corpus. Minimized test cases are written to disk manually, see below.
+                OnDiskCorpus::new(PathBuf::from(&min_opts.solutions)).unwrap(),
+                &mut (),
+                &mut (),
+            )
+            .unwrap();
+
+            // Combine the primary and secondary executor into a `DiffExecutor`.
+            let mut executor =
+                DiffExecutor::new(primary_executor, secondary_executor, tuple_list!());
+
+            let mut fuzzer = StdFuzzer::new(QueueScheduler::new(), (), ());
+
+            let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
+
+            let input = BytesInput::from_file(PathBuf::from(&min_opts.solution)).unwrap();
+            let size = input.bytes().len();
+            let readable_id = input.generate_name(0);
+
+            let id = state.corpus_mut().add(Testcase::new(input)).unwrap();
+
+            let mutator = StdScheduledMutator::new(havoc_mutations_no_crossover());
+            let tmin = StdTMinMutationalStage::new(mutator, objective, min_opts.iterations);
+
+            let mut stages = tuple_list!(tmin);
+            fuzzer
+                .fuzz_one(&mut stages, &mut executor, &mut state, &mut mgr)
+                .unwrap();
+
+            let mut testcase = state.testcase_mut(id).unwrap();
+            let input = testcase
+                .load_input(state.corpus())
+                .unwrap()
+                .bytes()
+                .to_vec();
+            drop(testcase);
+
+            if input.len() >= size {
+                eprintln!("Unable to reduce {}", min_opts.solution.as_str());
+            } else {
+                let dest = PathBuf::from(&min_opts.solutions)
+                    .join(format!("minimized-from-{}", readable_id));
+
+                std::fs::write(&dest, input).unwrap();
+                println!(
+                    "Wrote minimized input to {}",
+                    dest.file_name().unwrap().to_str().unwrap()
+                );
+            }
+
+            std::process::ExitCode::SUCCESS
         }
     }
 }

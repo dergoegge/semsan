@@ -12,7 +12,10 @@ pub enum Comparator {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Differentially fuzz the primary and secondary harness
     Fuzz(FuzzOptions),
+    /// Minimize a solution
+    Minimize(MinimizeOptions),
 }
 
 #[derive(Args)]
@@ -50,6 +53,20 @@ pub struct FuzzOptions {
         required = true
     )]
     pub solutions: String,
+}
+
+#[derive(Args)]
+pub struct MinimizeOptions {
+    #[arg(help = "Path to the solution to minimize")]
+    pub solution: String,
+    #[arg(help = "Directory storing minimized solutions")]
+    pub solutions: String,
+    #[arg(
+        long = "iterations",
+        help = "Number of iterations to attempt minimization for",
+        default_value_t = 128
+    )]
+    pub iterations: usize,
 }
 
 #[derive(Parser)]

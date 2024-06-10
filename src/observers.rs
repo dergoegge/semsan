@@ -1,18 +1,20 @@
+use std::borrow::Cow;
+
 use libafl::{executors::ExitKind, inputs::UsesInput, observers::Observer};
-use libafl_bolts::{ownedref::OwnedMutSlice, AsMutSlice, AsSlice, Named};
+use libafl_bolts::{ownedref::OwnedMutSlice, AsSlice, AsSliceMut, Named};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ShMemDifferentialValueObserver<'a> {
-    name: String,
+    name: Cow<'static, str>,
     last_value: Vec<u8>,
     #[serde(skip_serializing, skip_deserializing)]
     shmem: Option<OwnedMutSlice<'a, u8>>,
 }
 
 impl<'a> ShMemDifferentialValueObserver<'a> {
-    pub fn new(name: &str, shmem: OwnedMutSlice<'a, u8>) -> Self {
+    pub fn new(name: &'static str, shmem: OwnedMutSlice<'a, u8>) -> Self {
         Self {
-            name: String::from(name),
+            name: Cow::Borrowed(name),
             last_value: vec![0u8; shmem.as_slice().len()],
             shmem: Some(shmem),
         }
@@ -24,7 +26,7 @@ impl<'a> ShMemDifferentialValueObserver<'a> {
 }
 
 impl Named for ShMemDifferentialValueObserver<'_> {
-    fn name(&self) -> &str {
+    fn name(&self) -> &Cow<'static, str> {
         &self.name
     }
 }
@@ -39,7 +41,7 @@ where
         _input: &<S as UsesInput>::Input,
     ) -> Result<(), libafl::prelude::Error> {
         // Reset the differential value before executing the harness
-        self.shmem.as_mut().unwrap().as_mut_slice().fill(0);
+        self.shmem.as_mut().unwrap().as_slice_mut().fill(0);
         Ok(())
     }
 
