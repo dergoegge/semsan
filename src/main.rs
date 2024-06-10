@@ -36,7 +36,7 @@ use libafl_bolts::{
 
 use crate::corpus_syncer::CorpusSyncer;
 use crate::observers::ShMemDifferentialValueObserver;
-use crate::options::{Comparator, Options};
+use crate::options::{Command, Comparator, Options};
 
 const DIFFERENTIAL_VALUE_SHMEM_ID_ENV: &str = "DIFFERENTIAL_VALUE_SHMEM_ID";
 const MAX_DIFFERENTIAL_VALUE_SIZE: usize = 32;
@@ -175,82 +175,86 @@ fn main() -> std::process::ExitCode {
     // Resize the coverage maps according to the dynamic map size determined by the executors
     coverage_maps[0].truncate(primary_executor.coverage_map_size().unwrap());
 
-    let secondary_map_size = if opts.no_secondary_coverage {
-        0
-    } else {
-        secondary_executor.coverage_map_size().unwrap()
-    };
-    coverage_maps[1].truncate(secondary_map_size);
+    match &opts.command {
+        Command::Fuzz(fuzz_opts) => {
+            let secondary_map_size = if fuzz_opts.no_secondary_coverage {
+                0
+            } else {
+                secondary_executor.coverage_map_size().unwrap()
+            };
+            coverage_maps[1].truncate(secondary_map_size);
 
-    // Combine both coverage maps as feedback
-    let diff_map_observer = HitcountsIterableMapObserver::new(MultiMapObserver::differential(
-        "combined-coverage",
-        coverage_maps,
-    ))
-    .track_indices();
-    let mut coverage_feedback = MaxMapFeedback::new(&diff_map_observer);
+            // Combine both coverage maps as feedback
+            let diff_map_observer = HitcountsIterableMapObserver::new(
+                MultiMapObserver::differential("combined-coverage", coverage_maps),
+            )
+            .track_indices();
+            let mut coverage_feedback = MaxMapFeedback::new(&diff_map_observer);
 
-    let calibration_stage = CalibrationStage::new(&coverage_feedback);
+            let calibration_stage = CalibrationStage::new(&coverage_feedback);
 
-    let mut state = StdState::new(
-        StdRand::with_seed(libafl_bolts::current_nanos()),
-        InMemoryCorpus::<BytesInput>::new(),
-        OnDiskCorpus::new(PathBuf::from(&opts.solutions)).unwrap(),
-        &mut coverage_feedback,
-        &mut objective,
-    )
-    .unwrap();
-
-    let scheduler = IndexesLenTimeMinimizerScheduler::new(
-        &diff_map_observer,
-        PowerQueueScheduler::new(&mut state, &diff_map_observer, PowerSchedule::FAST),
-    );
-    let mut fuzzer = StdFuzzer::new(scheduler, coverage_feedback, objective);
-
-    // Combine the primary and secondary executor into a `DiffExecutor`.
-    let mut executor = DiffExecutor::new(
-        primary_executor,
-        secondary_executor,
-        tuple_list!(diff_map_observer),
-    );
-
-    let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
-
-    let mut corpus_syncer = CorpusSyncer::new(Duration::from_secs(opts.foreign_sync_interval));
-
-    corpus_syncer.sync(
-        &mut state,
-        &mut fuzzer,
-        &mut executor,
-        &mut mgr,
-        &[PathBuf::from(&opts.seeds)],
-    );
-
-    println!("Loaded {} initial inputs", state.corpus().count());
-
-    let mutator = StdMOptMutator::new(&mut state, havoc_mutations(), 7, 5).unwrap();
-
-    let mut stages = tuple_list!(calibration_stage, StdPowerMutationalStage::new(mutator));
-
-    loop {
-        mgr.maybe_report_progress(&mut state, std::time::Duration::from_secs(15))
+            let mut state = StdState::new(
+                StdRand::with_seed(libafl_bolts::current_nanos()),
+                InMemoryCorpus::<BytesInput>::new(),
+                OnDiskCorpus::new(PathBuf::from(&fuzz_opts.solutions)).unwrap(),
+                &mut coverage_feedback,
+                &mut objective,
+            )
             .unwrap();
-        fuzzer
-            .fuzz_one(&mut stages, &mut executor, &mut state, &mut mgr)
-            .expect("Error in the fuzzing loop");
 
-        if let Some(foreign_corpus) = opts.foreign_corpus.as_ref() {
+            let scheduler = IndexesLenTimeMinimizerScheduler::new(
+                &diff_map_observer,
+                PowerQueueScheduler::new(&mut state, &diff_map_observer, PowerSchedule::FAST),
+            );
+            let mut fuzzer = StdFuzzer::new(scheduler, coverage_feedback, objective);
+
+            // Combine the primary and secondary executor into a `DiffExecutor`.
+            let mut executor = DiffExecutor::new(
+                primary_executor,
+                secondary_executor,
+                tuple_list!(diff_map_observer),
+            );
+
+            let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
+
+            let mut corpus_syncer =
+                CorpusSyncer::new(Duration::from_secs(fuzz_opts.foreign_sync_interval));
+
             corpus_syncer.sync(
                 &mut state,
                 &mut fuzzer,
                 &mut executor,
                 &mut mgr,
-                &[PathBuf::from(foreign_corpus)],
+                &[PathBuf::from(&fuzz_opts.seeds)],
             );
-        }
 
-        if !opts.ignore_solutions && state.solutions().count() != 0 {
-            return std::process::ExitCode::from(opts.solution_exit_code);
+            println!("Loaded {} initial inputs", state.corpus().count());
+
+            let mutator = StdMOptMutator::new(&mut state, havoc_mutations(), 7, 5).unwrap();
+
+            let mut stages = tuple_list!(calibration_stage, StdPowerMutationalStage::new(mutator));
+
+            loop {
+                mgr.maybe_report_progress(&mut state, std::time::Duration::from_secs(15))
+                    .unwrap();
+                fuzzer
+                    .fuzz_one(&mut stages, &mut executor, &mut state, &mut mgr)
+                    .expect("Error in the fuzzing loop");
+
+                if let Some(foreign_corpus) = fuzz_opts.foreign_corpus.as_ref() {
+                    corpus_syncer.sync(
+                        &mut state,
+                        &mut fuzzer,
+                        &mut executor,
+                        &mut mgr,
+                        &[PathBuf::from(foreign_corpus)],
+                    );
+                }
+
+                if !fuzz_opts.ignore_solutions && state.solutions().count() != 0 {
+                    return std::process::ExitCode::from(opts.solution_exit_code);
+                }
+            }
         }
     }
 }
