@@ -40,8 +40,8 @@ use corpus_syncer::CorpusSyncer;
 use observers::ShMemDifferentialValueObserver;
 use options::{Command, Comparator, Options};
 
-const DIFFERENTIAL_VALUE_SHMEM_ID_ENV: &str = "DIFFERENTIAL_VALUE_SHMEM_ID";
-const MAX_DIFFERENTIAL_VALUE_SIZE: usize = 32;
+const CHARATERIZATION_SHMEM_ID_ENV: &str = "SEMSAN_CHARATERIZATION_SHMEM_ID";
+const MAX_CHARATERIZATION_SHMEM_SIZE: usize = 32;
 
 fn main() -> std::process::ExitCode {
     let opts = Options::parse();
@@ -54,10 +54,10 @@ fn main() -> std::process::ExitCode {
     // Create the shared memory that the fuzz harnesses write their execution output to. The output
     // is used as "differential value" to compare program semantics.
     let mut diff_value_shmem = shmem_provider
-        .new_shmem(MAX_DIFFERENTIAL_VALUE_SIZE)
+        .new_shmem(MAX_CHARATERIZATION_SHMEM_SIZE)
         .unwrap();
     diff_value_shmem
-        .write_to_env(DIFFERENTIAL_VALUE_SHMEM_ID_ENV)
+        .write_to_env(CHARATERIZATION_SHMEM_ID_ENV)
         .unwrap();
 
     // Create a differential value observer for each executor.
@@ -65,14 +65,14 @@ fn main() -> std::process::ExitCode {
         ShMemDifferentialValueObserver::new("diff-observer-1", unsafe {
             OwnedMutSlice::from_raw_parts_mut(
                 diff_value_shmem.as_mut_ptr_of().unwrap(),
-                MAX_DIFFERENTIAL_VALUE_SIZE,
+                MAX_CHARATERIZATION_SHMEM_SIZE,
             )
         });
     let secondary_diff_value_observer =
         ShMemDifferentialValueObserver::new("diff-observer-2", unsafe {
             OwnedMutSlice::from_raw_parts_mut(
                 diff_value_shmem.as_mut_ptr_of().unwrap(),
-                MAX_DIFFERENTIAL_VALUE_SIZE,
+                MAX_CHARATERIZATION_SHMEM_SIZE,
             )
         });
 

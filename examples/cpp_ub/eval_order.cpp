@@ -17,7 +17,7 @@ void fill_diff_value(uint8_t *value, uint8_t a, uint8_t b, uint8_t c) {
 static uint8_t *diff_value = nullptr;
 
 extern "C" int LLVMFuzzerInitialize(int *argc, char ***argv) {
-  const char *shmid{std::getenv("DIFFERENTIAL_VALUE_SHMEM_ID")};
+  const char *shmid{std::getenv("SEMSAN_CHARACTERIZATION_SHMEM_ID")};
   assert(shmid);
   diff_value = (uint8_t *)shmat(std::stoi(shmid), nullptr, 0);
   assert(diff_value);

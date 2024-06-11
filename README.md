@@ -35,9 +35,9 @@ difference has been found.
 
 Output values are collected through a shared memory region. Harnesses can
 attach and write to the shared memory through the shared memory ID set by
-SemSan on the `DIFFERENTIAL_VALUE_SHMEM_ID` environment variable. Note that the
-shared memory is only 32 bytes in size and harnesses should only write a hash
-(or otherwise short summary) to it.
+SemSan on the `SEMSAN_CHARACTERIZATION_SHMEM_ID` environment variable. Note
+that the shared memory is only 32 bytes in size and harnesses should only write
+a hash (or otherwise short summary) to it.
 
 SemSan loads the initial seeds from disk into memory and evolves the corpus in
 memory, it is not persisted to disk. Inputs that trigger semantic differences
