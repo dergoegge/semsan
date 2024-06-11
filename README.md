@@ -69,7 +69,7 @@ Options:
       --timeout <TIMEOUT>
           Maximum amount of time a single input is allowed to run (in milliseconds per executor). [default: 1000]
       --comparator <COMPARATOR>
-          Choose differential value comparator function [default: equal] [possible values: equal, less-than, less-than-or-equal, greater-than, greater-than-or-equal]
+          Choose differential value comparator function [default: equal] [possible values: not-equal, equal, less-than, less-than-or-equal, greater-than, greater-than-or-equal]
       --solution-exit-code <SOLUTION_EXIT_CODE>
           Exit code for solutions [default: 71]
   -h, --help
@@ -120,7 +120,8 @@ Options:
 
 By default SemSan will check for equality when comparing the observed output
 values but that is configurable with the `--comparator` option. Currently, the
-only supported comparators are `equal`, `less-than` and `less-than-or-equal`.
+only supported comparators are `not-equal`, `equal`, `less-than`,
+`less-than-or-equal`, `greater-than` and `greater-than-or-equal`.
 
 Using comparators other than `equal` can be useful when the harnesses under
 test are allowed to behave differently to some extend.

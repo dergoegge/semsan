@@ -77,6 +77,8 @@ fn main() -> std::process::ExitCode {
         });
 
     let compare_fn = match opts.comparator {
+        // Targets behave the same if the outputs are not equal
+        Comparator::NotEqual => |output1: &[u8], output2: &[u8]| output1 != output2,
         // Targets behave the same if the outputs are equal
         Comparator::Equal => |output1: &[u8], output2: &[u8]| output1 == output2,
         // Targets behave the same if the primary output is less than the secondary output
