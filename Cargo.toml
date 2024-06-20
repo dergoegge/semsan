@@ -6,8 +6,8 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.3.0", features = ["derive", "string"] }
-libafl = { git = "https://github.com/AFLplusplus/LibAFL.git", branch = "main" }
-libafl_bolts = { git = "https://github.com/AFLplusplus/LibAFL.git", branch = "main" }
+libafl = "0.13.0"
+libafl_bolts = "0.13.0"
 serde = "1.0.200"
 
 [[bin]]

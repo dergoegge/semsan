@@ -401,8 +401,9 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 
 [[package]]
 name = "libafl"
-version = "0.12.0"
-source = "git+https://github.com/AFLplusplus/LibAFL.git?branch=main#df40db5ae82b757729c35ad8ff5ac3da7ddf9696"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84e43f5d70c8493206ef0f3ba2bf472dbeefae10c77b2795008b57fcd28821a5"
 dependencies = [
  "ahash",
  "backtrace",
@@ -436,8 +437,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_bolts"
-version = "0.12.0"
-source = "git+https://github.com/AFLplusplus/LibAFL.git?branch=main#df40db5ae82b757729c35ad8ff5ac3da7ddf9696"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbff57b1525c54dc43dc40f5d93d834ab64c27674599b835340cdbcaaaa95f74"
 dependencies = [
  "ahash",
  "backtrace",
@@ -468,8 +470,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_derive"
-version = "0.12.0"
-source = "git+https://github.com/AFLplusplus/LibAFL.git?branch=main#df40db5ae82b757729c35ad8ff5ac3da7ddf9696"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ff4e3381e5973acfb7d4c3fb53d1697c1e8f8513e9c606d743ca3b4697c2c77"
 dependencies = [
  "quote",
  "syn 2.0.66",
