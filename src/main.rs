@@ -233,6 +233,14 @@ fn main() -> std::process::ExitCode {
 
             println!("Loaded {} initial inputs", state.corpus().count());
 
+            if !fuzz_opts.ignore_solutions && state.solutions().count() != 0 {
+                // Solution found during initial loading of the seed corpus.
+                return std::process::ExitCode::from(opts.solution_exit_code);
+            }
+            if fuzz_opts.run_seeds_once {
+                return std::process::ExitCode::SUCCESS;
+            }
+
             let mutator = StdMOptMutator::new(&mut state, havoc_mutations(), 7, 5).unwrap();
 
             let mut stages = tuple_list!(calibration_stage, StdPowerMutationalStage::new(mutator));

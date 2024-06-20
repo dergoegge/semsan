@@ -44,6 +44,12 @@ pub struct FuzzOptions {
         default_value_t = false
     )]
     pub no_secondary_coverage: bool,
+    #[arg(
+        long = "run-seeds-once",
+        help = "Run through the seeds once and quit",
+        default_value_t = false
+    )]
+    pub run_seeds_once: bool,
 
     #[arg(long = "seeds", help = "Seed corpus directory", required = true)]
     pub seeds: String,

@@ -87,14 +87,17 @@ where
                 }
 
                 // Evaluate the input for corpus inclusion
-                if let Ok((ExecuteInputResult::None, _)) =
-                    evaluator.evaluate_input(state, executor, manager, input.clone())
-                {
-                    // The input was not interesting but we'll add it to the corpus as "disabled"
-                    // anyway, which will prompt libafl to still use it for splice mutations.
-                    if self.last_evaluated.is_none() {
-                        let _ = evaluator.add_disabled_input(state, input);
+                match evaluator.evaluate_input(state, executor, manager, input.clone()) {
+                    Ok((ExecuteInputResult::None, _)) => {
+                        // The input was not interesting but we'll add it to the corpus as "disabled"
+                        // anyway, which will prompt libafl to still use it for splice mutations.
+                        if self.last_evaluated.is_none() {
+                            let _ = evaluator.add_disabled_input(state, input);
+                        }
                     }
+                    // Stop syncing corpus if solution is found.
+                    Ok((ExecuteInputResult::Solution, _)) => break,
+                    _ => {}
                 }
             }
         }
