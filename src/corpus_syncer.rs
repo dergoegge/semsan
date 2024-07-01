@@ -81,7 +81,7 @@ where
             }
 
             if let Ok(input) = S::Input::from_file(&path) {
-                if !self.evaluated.insert(input.generate_name(0)) {
+                if !self.evaluated.insert(input.generate_name(None)) {
                     // Only evaulate new inputs
                     continue;
                 }

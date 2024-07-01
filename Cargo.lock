@@ -401,9 +401,9 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 
 [[package]]
 name = "libafl"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84e43f5d70c8493206ef0f3ba2bf472dbeefae10c77b2795008b57fcd28821a5"
+checksum = "9ef11306fe131871480b650648aaf81db0c0c30068f886f2de5cb9b407b2ffac"
 dependencies = [
  "ahash",
  "backtrace",
@@ -437,9 +437,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_bolts"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbff57b1525c54dc43dc40f5d93d834ab64c27674599b835340cdbcaaaa95f74"
+checksum = "ccd2aed6c2f83d6be5f243e7c4ed5f5b87538b9868d70a483e0eaaa05fea782d"
 dependencies = [
  "ahash",
  "backtrace",
@@ -470,9 +470,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_derive"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ff4e3381e5973acfb7d4c3fb53d1697c1e8f8513e9c606d743ca3b4697c2c77"
+checksum = "9c566e831be2d55db7938ee506f8a9cfac7d9b65a8ca58c3c1ac2795b0a0bfbf"
 dependencies = [
  "quote",
  "syn 2.0.66",

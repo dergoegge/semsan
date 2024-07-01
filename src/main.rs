@@ -290,7 +290,7 @@ fn main() -> std::process::ExitCode {
 
             let input = BytesInput::from_file(PathBuf::from(&min_opts.solution)).unwrap();
             let size = input.bytes().len();
-            let readable_id = input.generate_name(0);
+            let readable_id = input.generate_name(None);
 
             let id = state.corpus_mut().add(Testcase::new(input)).unwrap();
 
