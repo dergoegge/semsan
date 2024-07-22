@@ -72,9 +72,14 @@ Options:
           Choose differential value comparator function [default: equal] [possible values: not-equal, equal, less-than, less-than-or-equal, greater-than, greater-than-or-equal]
       --solution-exit-code <SOLUTION_EXIT_CODE>
           Exit code for solutions [default: 71]
+      --qemu-entry <QEMU_ENTRY>
+          Symbol for the qemu entry breakpoint [default: LLVMFuzzerTestOneInput]
   -h, --help
           Print help
 ```
+
+The `--qemu-entry` option is only available if SemSan was compiled for
+emulation (e.g. `--features qemu_x86_64`).
 
 ### Fuzzing
 

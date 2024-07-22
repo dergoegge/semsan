@@ -52,10 +52,8 @@ const MAX_CHARACTERIZATION_SHMEM_SIZE: usize = 32;
 const MAX_INPUT_SIZE: usize = 1_048_576;
 
 #[cfg(feature = "qemu")]
-fn setup_qemu(entry: &str) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr) {
-    let mut qemu_args = Vec::new();
-    qemu_args.insert(0, String::from("examples/arch/arch-arm64"));
-    qemu_args.insert(0, String::from("semsan"));
+fn setup_qemu(entry: &str, qemu_binary: &str) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr) {
+    let qemu_args = vec![String::from("semsan"), String::from(qemu_binary)];
 
     // Setup QEMU
     let mut env: HashMap<String, String> = std::env::vars().collect();
@@ -123,7 +121,8 @@ fn main() -> std::process::ExitCode {
         });
 
     #[cfg(feature = "qemu")]
-    let (emulator, pc, stack_ptr, ret_addr, input_addr) = setup_qemu(&opts.qemu_entry);
+    let (emulator, pc, stack_ptr, ret_addr, input_addr) =
+        setup_qemu(&opts.qemu_entry, &opts.secondary);
 
     let compare_fn = match opts.comparator {
         // Targets behave the same if the outputs are not equal
