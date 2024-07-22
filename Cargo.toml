@@ -11,6 +11,8 @@ qemu_be = ["qemu", "libafl_qemu/be", "dep:libafl_qemu"]
 # libafl_qemu architecture at a time.
 qemu_x86_64 = ["qemu", "libafl_qemu/x86_64", "dep:libafl_qemu"]   # amd64
 qemu_aarch64 = ["qemu", "libafl_qemu/aarch64", "dep:libafl_qemu"] # arm64
+qemu_i386 = ["qemu", "libafl_qemu/i386", "dep:libafl_qemu"]
+qemu_arm = ["qemu", "libafl_qemu/arm", "dep:libafl_qemu"]
 
 [dependencies]
 clap = { version = "4.3.0", features = ["derive", "string"] }
@@ -32,3 +34,13 @@ required-features = ["qemu_x86_64"]
 name = "semsan-aarch64"
 path = "src/main.rs"
 required-features = ["qemu_aarch64"]
+
+[[bin]]
+name = "semsan-i386"
+path = "src/main.rs"
+required-features = ["qemu_i386"]
+
+[[bin]]
+name = "semsan-arm"
+path = "src/main.rs"
+required-features = ["qemu_arm"]
