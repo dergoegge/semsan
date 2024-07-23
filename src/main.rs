@@ -52,8 +52,13 @@ const MAX_CHARACTERIZATION_SHMEM_SIZE: usize = 32;
 const MAX_INPUT_SIZE: usize = 1_048_576;
 
 #[cfg(feature = "qemu")]
-fn setup_qemu(entry: &str, qemu_binary: &str) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr) {
-    let qemu_args = vec![String::from("semsan"), String::from(qemu_binary)];
+fn setup_qemu(
+    entry: &str,
+    qemu_binary: &str,
+    args: Vec<String>,
+) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr) {
+    let mut qemu_args = vec![String::from("semsan"), String::from(qemu_binary)];
+    qemu_args.extend(args);
 
     // Setup QEMU
     let mut env: HashMap<String, String> = std::env::vars().collect();
@@ -120,9 +125,15 @@ fn main() -> std::process::ExitCode {
             )
         });
 
+    let mut primary_args = opts.primary_args.clone();
+    let mut secondary_args = opts.secondary_args.clone();
+
+    primary_args.extend(opts.shared_args.clone());
+    secondary_args.extend(opts.shared_args.clone());
+
     #[cfg(feature = "qemu")]
     let (emulator, pc, stack_ptr, ret_addr, input_addr) =
-        setup_qemu(&opts.qemu_entry, &opts.secondary);
+        setup_qemu(&opts.qemu_entry, &opts.secondary, secondary_args.clone());
 
     let compare_fn = match opts.comparator {
         // Targets behave the same if the outputs are not equal
@@ -182,6 +193,7 @@ fn main() -> std::process::ExitCode {
 
     let primary_executor = ForkserverExecutor::builder()
         .program(PathBuf::from(&opts.primary))
+        .args(&primary_args)
         .debug_child(opts.debug)
         .shmem_provider(&mut shmem_provider)
         .coverage_map_size(MAX_MAP_SIZE)
@@ -205,6 +217,7 @@ fn main() -> std::process::ExitCode {
     #[cfg(not(feature = "qemu"))]
     let secondary_executor = ForkserverExecutor::builder()
         .program(PathBuf::from(&opts.secondary))
+        .args(&secondary_args)
         .debug_child(opts.debug)
         .shmem_provider(&mut shmem_provider)
         .coverage_map_size(MAX_MAP_SIZE)

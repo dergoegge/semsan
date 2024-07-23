@@ -11,7 +11,7 @@ pub enum Comparator {
 }
 // TODO: Allow custom comparators
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum Command {
     /// Differentially fuzz the primary and secondary harness
     Fuzz(FuzzOptions),
@@ -19,7 +19,7 @@ pub enum Command {
     Minimize(MinimizeOptions),
 }
 
-#[derive(Args)]
+#[derive(Debug, Args)]
 pub struct FuzzOptions {
     #[arg(
         long = "ignore-solutions",
@@ -62,7 +62,7 @@ pub struct FuzzOptions {
     pub solutions: String,
 }
 
-#[derive(Args)]
+#[derive(Debug, Args)]
 pub struct MinimizeOptions {
     #[arg(help = "Path to the solution to minimize")]
     pub solution: String,
@@ -76,7 +76,7 @@ pub struct MinimizeOptions {
     pub iterations: usize,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 pub struct Options {
     #[arg(
         long = "debug-children",
@@ -109,6 +109,29 @@ pub struct Options {
         default_value = "LLVMFuzzerTestOneInput"
     )]
     pub qemu_entry: String,
+
+    // TODO: ' ' as delimiter won't work for all programs, e.g. "--foobar="bla bla" --opt" should
+    // be parsed as ["--foobar="bla bla", "--opt"] but with only space as the delim it'll be parsed
+    // as ["--foobar=\"bla", "bla\"", "--opt"].
+    #[arg(
+        long = "primary-args",
+        help = "Arguments to pass to the primary harness",
+        value_delimiter = ' '
+    )]
+    pub primary_args: Vec<String>,
+    #[arg(
+        long = "secondary-args",
+        help = "Arguments to pass to the secondary harness",
+        value_delimiter = ' '
+    )]
+    pub secondary_args: Vec<String>,
+    #[arg(
+        long = "args",
+        help = "Arguments to pass to both harnesses",
+        value_delimiter = ' '
+    )]
+    pub shared_args: Vec<String>,
+
     #[command(subcommand)]
     pub command: Command,
     #[arg(
