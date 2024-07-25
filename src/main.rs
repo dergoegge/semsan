@@ -80,7 +80,13 @@ fn setup_qemu(
     let stack_ptr: GuestAddr = emu.read_reg(Regs::Sp).unwrap();
     let ret_addr: GuestAddr = emu.read_return_address().unwrap();
 
-    emu.set_breakpoint(ret_addr);
+    let mut breakpoint = ret_addr;
+    #[cfg(feature = "qemu_arm")]
+    if breakpoint & 1 == 1 {
+        // Arm32 thumb state detected, subtract one for the breakpoint
+        breakpoint -= 1;
+    }
+    emu.set_breakpoint(breakpoint);
 
     let input_addr = emu
         .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
@@ -260,7 +266,8 @@ fn main() -> std::process::ExitCode {
             emulator
                 .write_function_argument(CallingConvention::Cdecl, 1, len)
                 .unwrap();
-            // TODO handle emulation results?
+            // TODO handle emulation results? siwtch to QemuForkExecutor to warn about exit(_)
+            // usage in the target
             let _ = emulator.run();
         }
 
