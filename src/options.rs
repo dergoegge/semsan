@@ -79,10 +79,15 @@ pub struct MinimizeOptions {
 #[derive(Parser, Debug)]
 pub struct Options {
     #[arg(
+        long = "debug",
+        help = "Print various things that help with debugging SemSan itself."
+    )]
+    pub debug: bool,
+    #[arg(
         long = "debug-children",
         help = "Redirect the executors' std{out,err} to SemSan's std{out,err}. Useful for debugging solutions and harnesses."
     )]
-    pub debug: bool,
+    pub debug_children: bool,
     #[arg(
         long = "timeout",
         help = "Maximum amount of time a single input is allowed to run (in milliseconds per executor).",

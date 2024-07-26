@@ -141,6 +141,14 @@ fn main() -> std::process::ExitCode {
     let (emulator, pc, stack_ptr, ret_addr, input_addr) =
         setup_qemu(&opts.qemu_entry, &opts.secondary, secondary_args.clone());
 
+    #[cfg(feature = "qemu")]
+    if opts.debug {
+        println!(
+            "Successfully setup qemu: pc={:?} stack_ptr={:?} ret_addr={:?} input_addr={:?}",
+            pc, stack_ptr, ret_addr, input_addr
+        );
+    }
+
     let compare_fn = match opts.comparator {
         // Targets behave the same if the outputs are not equal
         Comparator::NotEqual => |output1: &[u8], output2: &[u8]| output1 != output2,
@@ -163,6 +171,14 @@ fn main() -> std::process::ExitCode {
         &primary_diff_value_observer,
         &secondary_diff_value_observer,
         |o1, o2| {
+            if opts.debug {
+                println!(
+                    "Observed characterization values: v1={:?} v2={:?}",
+                    o1.last_value(),
+                    o2.last_value()
+                );
+            }
+
             if compare_fn(o1.last_value(), o2.last_value()) {
                 DiffResult::Equal
             } else {
@@ -200,7 +216,7 @@ fn main() -> std::process::ExitCode {
     let primary_executor = ForkserverExecutor::builder()
         .program(PathBuf::from(&opts.primary))
         .args(&primary_args)
-        .debug_child(opts.debug)
+        .debug_child(opts.debug_children)
         .shmem_provider(&mut shmem_provider)
         .coverage_map_size(MAX_MAP_SIZE)
         .timeout(Duration::from_millis(opts.timeout))
@@ -224,7 +240,7 @@ fn main() -> std::process::ExitCode {
     let secondary_executor = ForkserverExecutor::builder()
         .program(PathBuf::from(&opts.secondary))
         .args(&secondary_args)
-        .debug_child(opts.debug)
+        .debug_child(opts.debug_children)
         .shmem_provider(&mut shmem_provider)
         .coverage_map_size(MAX_MAP_SIZE)
         .timeout(Duration::from_millis(opts.timeout))
@@ -285,6 +301,10 @@ fn main() -> std::process::ExitCode {
         Command::Fuzz(fuzz_opts) => {
             // Resize the coverage maps according to the dynamic map size determined by the executors
             coverage_maps[0].truncate(primary_executor.coverage_map_size().unwrap());
+            println!(
+                "Truncated primary coverage map to {} bytes",
+                coverage_maps[0].len()
+            );
 
             #[cfg(feature = "qemu")]
             if !fuzz_opts.no_secondary_coverage {
@@ -296,7 +316,13 @@ fn main() -> std::process::ExitCode {
             };
 
             if fuzz_opts.no_secondary_coverage {
+                println!("Ignoring coverage feedback for the secondary executor!");
                 coverage_maps[1].truncate(0);
+            } else {
+                println!(
+                    "Truncated secondary coverage map to {} bytes",
+                    coverage_maps[1].len()
+                );
             }
 
             // Combine both coverage maps as feedback

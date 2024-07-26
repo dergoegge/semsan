@@ -64,6 +64,8 @@ Arguments:
   <SECONDARY>  Path to the binary of the secondary harness to fuzz
 
 Options:
+      --debug
+          Print various things that help with debugging SemSan itself.
       --debug-children
           Redirect the executors' std{out,err} to SemSan's std{out,err}. Useful for debugging solutions and harnesses.
       --timeout <TIMEOUT>
