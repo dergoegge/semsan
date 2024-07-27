@@ -186,6 +186,17 @@ fn main() -> std::process::ExitCode {
                 eprintln!("primary  : {:?}", o1.last_value());
                 eprintln!("secondary: {:?}", o2.last_value());
 
+                use std::env::consts::{ARCH, FAMILY, OS};
+                eprintln!("Host: {}-{}-{}", OS, FAMILY, ARCH);
+
+                #[cfg(feature = "qemu")]
+                eprintln!(
+                    "Executed '{}' against '{}' (emulated)",
+                    &opts.primary, &opts.secondary
+                );
+                #[cfg(not(feature = "qemu"))]
+                eprintln!("Executed '{}' against '{}'", &opts.primary, &opts.secondary);
+
                 DiffResult::Diff
             }
         },
