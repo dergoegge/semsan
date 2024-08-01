@@ -1,4 +1,6 @@
 mod corpus_syncer;
+#[macro_use]
+mod dlsym;
 mod observers;
 mod options;
 
@@ -44,6 +46,7 @@ use libafl_qemu::{
 };
 
 use corpus_syncer::CorpusSyncer;
+use dlsym::DlSym;
 use observers::ShMemDifferentialValueObserver;
 use options::{Command, Comparator, Options};
 
@@ -149,19 +152,37 @@ fn main() -> std::process::ExitCode {
         );
     }
 
-    let compare_fn = match opts.comparator {
+    dlsym! { fn semsan_custom_comparator(*const u8, usize, *const u8, usize) -> bool }
+    let custom_comparator = semsan_custom_comparator.get();
+
+    let compare_fn: Box<dyn Fn(&[u8], &[u8]) -> bool> = match opts.comparator {
         // Targets behave the same if the outputs are not equal
-        Comparator::NotEqual => |output1: &[u8], output2: &[u8]| output1 != output2,
+        Comparator::NotEqual => Box::new(|output1: &[u8], output2: &[u8]| output1 != output2),
         // Targets behave the same if the outputs are equal
-        Comparator::Equal => |output1: &[u8], output2: &[u8]| output1 == output2,
+        Comparator::Equal => Box::new(|output1: &[u8], output2: &[u8]| output1 == output2),
         // Targets behave the same if the primary output is less than the secondary output
-        Comparator::LessThan => |output1: &[u8], output2: &[u8]| output1 < output2,
+        Comparator::LessThan => Box::new(|output1: &[u8], output2: &[u8]| output1 < output2),
         // Targets behave the same if the primary output is less than or equal to the secondary output
-        Comparator::LessThanOrEqual => |output1: &[u8], output2: &[u8]| output1 <= output2,
+        Comparator::LessThanOrEqual => {
+            Box::new(|output1: &[u8], output2: &[u8]| output1 <= output2)
+        }
         // Targets behave the same if the primary output is greater than the secondary output
-        Comparator::GreaterThan => |output1: &[u8], output2: &[u8]| output1 > output2,
+        Comparator::GreaterThan => Box::new(|output1: &[u8], output2: &[u8]| output1 > output2),
         // Targets behave the same if the primary output is greater than or equal to the secondary output
-        Comparator::GreaterThanOrEqual => |output1: &[u8], output2: &[u8]| output1 >= output2,
+        Comparator::GreaterThanOrEqual => {
+            Box::new(|output1: &[u8], output2: &[u8]| output1 >= output2)
+        }
+        // Call out to the user defined custom comparator
+        Comparator::Custom => Box::new(|output1: &[u8], output2: &[u8]| unsafe {
+            custom_comparator
+                .as_ref()
+                .expect("Custom comparator needs to LD_PRELOADed!")(
+                output1.as_ptr(),
+                output1.len(),
+                output2.as_ptr(),
+                output2.len(),
+            )
+        }),
     };
 
     // Both observers are combined into a `DiffFeedback` that compares the retrieved values from

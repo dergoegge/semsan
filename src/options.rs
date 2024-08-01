@@ -8,8 +8,8 @@ pub enum Comparator {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+    Custom,
 }
-// TODO: Allow custom comparators
 
 #[derive(Debug, Subcommand)]
 pub enum Command {

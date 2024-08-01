@@ -1295,6 +1295,7 @@ dependencies = [
  "libafl",
  "libafl_bolts",
  "libafl_qemu",
+ "libc",
  "serde",
 ]
 

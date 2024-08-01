@@ -19,6 +19,7 @@ clap = { version = "4.3.0", features = ["derive", "string"] }
 libafl = "0.13.1"
 libafl_bolts = "0.13.1"
 libafl_qemu = { version = "0.13.1", features = ["usermode"], optional = true }
+libc = "0.2.155"
 serde = "1.0.200"
 
 [[bin]]
