@@ -658,9 +658,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libafl"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ef11306fe131871480b650648aaf81db0c0c30068f886f2de5cb9b407b2ffac"
+checksum = "9e42c22bae397bf94fbc321fae00f4aa9914d641b4f332c15f1d1fd46adafcf3"
 dependencies = [
  "ahash",
  "backtrace",
@@ -694,9 +694,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_bolts"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccd2aed6c2f83d6be5f243e7c4ed5f5b87538b9868d70a483e0eaaa05fea782d"
+checksum = "728dca49b0c000d62b94e1d92dffd76379ed313f28da14f45a7ddf2604d137f9"
 dependencies = [
  "ahash",
  "backtrace",
@@ -727,9 +727,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_derive"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c566e831be2d55db7938ee506f8a9cfac7d9b65a8ca58c3c1ac2795b0a0bfbf"
+checksum = "fb28be024e17736dc77eca670c85e0bca03dd7a142b5908076e6b394c9942566"
 dependencies = [
  "quote",
  "syn 2.0.71",
@@ -737,9 +737,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_qemu"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9e2ba39a2193fa728f87a20fd96353a47ff737e8121d8ce1714d74a4f21378a"
+checksum = "78877d135f7fe36011bc74bfb1d5db573cb4dd8837f9106eab0cc88a1d2c37ff"
 dependencies = [
  "addr2line 0.23.0",
  "bindgen",
@@ -778,9 +778,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_qemu_build"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d9a5fba7df07b1d67bf78dd2d7014f8e7a8585d87898fb499b9a15d1f58a277"
+checksum = "478f36dd8cc7f91bc6df5dc5407f0ff7a699a83200834a8e6cd618bf15595993"
 dependencies = [
  "bindgen",
  "cc",
@@ -795,9 +795,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_qemu_sys"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65e861dde713271340b8859a043a69cbd69dd8ed75262b3200a4fd44fe2a84bb"
+checksum = "676a6a748332c39ec1ba89097217332d8a7eef99ffe9f335d9674a816ce2c125"
 dependencies = [
  "libafl_qemu_build",
  "libc",
@@ -810,9 +810,9 @@ dependencies = [
 
 [[package]]
 name = "libafl_targets"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d0e07f5f7fcae18ec1143762c832e3c900c7f6d0f96d62c21e7517245344951"
+checksum = "b29b5e4c6dc4be19b04602d0e420678569e59c1701f4562cf2f2d0a1df9f03b4"
 dependencies = [
  "bindgen",
  "cc",

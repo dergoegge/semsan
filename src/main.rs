@@ -3,6 +3,8 @@ mod corpus_syncer;
 mod dlsym;
 mod observers;
 mod options;
+#[cfg(feature = "qemu")]
+mod qemu_harness;
 
 use clap::Parser;
 
@@ -13,12 +15,12 @@ use std::time::Duration;
 use libafl::{
     corpus::{Corpus, HasTestcase, InMemoryCorpus, OnDiskCorpus, Testcase},
     events::{ProgressReporter, SimpleEventManager},
-    executors::{DiffExecutor, ExitKind, ForkserverExecutor},
+    executors::{DiffExecutor, ForkserverExecutor},
     feedbacks::{
         differential::{DiffFeedback, DiffResult},
         MaxMapFeedback,
     },
-    inputs::{BytesInput, HasMutatorBytes, HasTargetBytes, Input},
+    inputs::{BytesInput, HasMutatorBytes, Input},
     monitors::SimplePrintingMonitor,
     mutators::{
         havoc_mutations, havoc_mutations_no_crossover, StdMOptMutator, StdScheduledMutator,
@@ -30,7 +32,7 @@ use libafl::{
     },
     stages::{CalibrationStage, StdPowerMutationalStage, StdTMinMutationalStage},
     state::{HasCorpus, HasSolutions, StdState},
-    Fuzzer, StdFuzzer,
+    Error, Fuzzer, StdFuzzer,
 };
 use libafl_bolts::{
     ownedref::OwnedMutSlice,
@@ -41,8 +43,8 @@ use libafl_bolts::{
 };
 #[cfg(feature = "qemu")]
 use libafl_qemu::{
-    edges::QemuEdgeCoverageClassicHelper, elf::EasyElf, ArchExtras, CallingConvention, GuestAddr,
-    GuestReg, MmapPerms, Qemu, QemuExecutor, QemuHooks, Regs,
+    command::NopCommandManager, elf::EasyElf, modules::edges::EdgeCoverageClassicModule,
+    ArchExtras, Emulator, GuestAddr, NopEmulatorExitHandler, Qemu, QemuExecutor,
 };
 
 use corpus_syncer::CorpusSyncer;
@@ -55,11 +57,7 @@ const MAX_CHARACTERIZATION_SHMEM_SIZE: usize = 32;
 const MAX_INPUT_SIZE: usize = 1_048_576;
 
 #[cfg(feature = "qemu")]
-fn setup_qemu(
-    entry: &str,
-    qemu_binary: &str,
-    args: Vec<String>,
-) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr) {
+fn setup_qemu(entry: &str, qemu_binary: &str, args: Vec<String>) -> Qemu {
     let mut qemu_args = vec![String::from("semsan"), String::from(qemu_binary)];
     qemu_args.extend(args);
 
@@ -67,21 +65,22 @@ fn setup_qemu(
     let mut env: HashMap<String, String> = std::env::vars().collect();
     env.remove("LD_LIBRARY_PATH");
     let env: Vec<(String, String)> = env.drain().collect();
-    let emu = Qemu::init(qemu_args.as_slice(), env.as_slice()).unwrap();
+    let qemu = Qemu::init(qemu_args.as_slice(), env.as_slice()).unwrap();
 
     let mut elf_buffer = Vec::new();
-    let elf = EasyElf::from_file(emu.binary_path(), &mut elf_buffer).unwrap();
+    let elf = EasyElf::from_file(qemu.binary_path(), &mut elf_buffer).unwrap();
 
     let test_one_input_ptr = elf
-        .resolve_symbol(entry, emu.load_addr())
+        .resolve_symbol(entry, qemu.load_addr())
         .expect(&format!("Symbol {} not found", entry));
 
     // Emulate until `LLVMFuzzerTestOneInput` is hit
-    emu.entry_break(test_one_input_ptr);
+    qemu.entry_break(test_one_input_ptr);
 
-    let pc: GuestReg = emu.read_reg(Regs::Pc).unwrap();
-    let stack_ptr: GuestAddr = emu.read_reg(Regs::Sp).unwrap();
-    let ret_addr: GuestAddr = emu.read_return_address().unwrap();
+    let ret_addr: GuestAddr = qemu
+        .read_return_address()
+        .map_err(|e| Error::unknown(format!("Failed to read return address: {e:?}")))
+        .unwrap();
 
     let mut breakpoint = ret_addr;
     #[cfg(feature = "qemu_arm")]
@@ -89,13 +88,9 @@ fn setup_qemu(
         // Arm32 thumb state detected, subtract one for the breakpoint
         breakpoint -= 1;
     }
-    emu.set_breakpoint(breakpoint);
+    qemu.set_breakpoint(breakpoint);
 
-    let input_addr = emu
-        .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
-        .unwrap();
-
-    (emu, pc, stack_ptr, ret_addr, input_addr)
+    qemu
 }
 
 fn main() -> std::process::ExitCode {
@@ -141,16 +136,7 @@ fn main() -> std::process::ExitCode {
     secondary_args.extend(opts.shared_args.clone());
 
     #[cfg(feature = "qemu")]
-    let (emulator, pc, stack_ptr, ret_addr, input_addr) =
-        setup_qemu(&opts.qemu_entry, &opts.secondary, secondary_args.clone());
-
-    #[cfg(feature = "qemu")]
-    if opts.debug {
-        println!(
-            "Successfully setup qemu: pc={:?} stack_ptr={:?} ret_addr={:?} input_addr={:?}",
-            pc, stack_ptr, ret_addr, input_addr
-        );
-    }
+    let qemu = setup_qemu(&opts.qemu_entry, &opts.secondary, secondary_args.clone());
 
     dlsym! { fn semsan_custom_comparator(*const u8, usize, *const u8, usize) -> bool }
     let custom_comparator = semsan_custom_comparator.get();
@@ -293,41 +279,17 @@ fn main() -> std::process::ExitCode {
         .unwrap();
 
     #[cfg(feature = "qemu")]
-    let mut secondary_qemu_harness = |input: &BytesInput| {
-        let target = input.target_bytes();
-        let mut buf = target.as_slice();
-        let mut len = buf.len();
-        if len > MAX_INPUT_SIZE {
-            buf = &buf[0..MAX_INPUT_SIZE];
-            len = MAX_INPUT_SIZE;
-        }
-        let len = len as GuestReg;
-
-        unsafe {
-            emulator.write_mem(input_addr, buf);
-            emulator.write_reg(Regs::Pc, pc).unwrap();
-            emulator.write_reg(Regs::Sp, stack_ptr).unwrap();
-            emulator.write_return_address(ret_addr).unwrap();
-            emulator
-                .write_function_argument(CallingConvention::Cdecl, 0, input_addr)
-                .unwrap();
-            emulator
-                .write_function_argument(CallingConvention::Cdecl, 1, len)
-                .unwrap();
-            // TODO handle emulation results? siwtch to QemuForkExecutor to warn about exit(_)
-            // usage in the target
-            let _ = emulator.run();
-        }
-
-        ExitKind::Ok
-    };
-
+    let secondary_qemu_harness = qemu_harness::Harness::new(&qemu).unwrap();
     #[cfg(feature = "qemu")]
-    let mut hooks = QemuHooks::new(
-        emulator.clone(),
-        // TODO: The classic helper is needed for StdMapObserver.
-        tuple_list!(QemuEdgeCoverageClassicHelper::default(),),
-    );
+    let mut secondary_qemu_harness = |input: &BytesInput| secondary_qemu_harness.run(input);
+    #[cfg(feature = "qemu")]
+    let mut emulator = Emulator::new_with_qemu(
+        qemu,
+        tuple_list!(EdgeCoverageClassicModule::default(),),
+        NopEmulatorExitHandler,
+        NopCommandManager,
+    )
+    .unwrap();
 
     match &opts.command {
         Command::Fuzz(fuzz_opts) => {
@@ -385,7 +347,7 @@ fn main() -> std::process::ExitCode {
 
             #[cfg(feature = "qemu")]
             let secondary_executor = QemuExecutor::new(
-                &mut hooks,
+                &mut emulator,
                 &mut secondary_qemu_harness,
                 tuple_list!(secondary_map_observer, secondary_diff_value_observer),
                 &mut fuzzer,
@@ -468,7 +430,7 @@ fn main() -> std::process::ExitCode {
 
             #[cfg(feature = "qemu")]
             let secondary_executor = QemuExecutor::new(
-                &mut hooks,
+                &mut emulator,
                 &mut secondary_qemu_harness,
                 tuple_list!(secondary_map_observer, secondary_diff_value_observer),
                 &mut fuzzer,
