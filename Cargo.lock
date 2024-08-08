@@ -659,8 +659,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 [[package]]
 name = "libafl"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ef11306fe131871480b650648aaf81db0c0c30068f886f2de5cb9b407b2ffac"
+source = "git+https://github.com/AFLplusplus/LibAFL.git?tag=0.13.1#bb579e624e907b6488f019a6f0bb0634aa0f81da"
 dependencies = [
  "ahash",
  "backtrace",
@@ -695,8 +694,7 @@ dependencies = [
 [[package]]
 name = "libafl_bolts"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccd2aed6c2f83d6be5f243e7c4ed5f5b87538b9868d70a483e0eaaa05fea782d"
+source = "git+https://github.com/AFLplusplus/LibAFL.git?tag=0.13.1#bb579e624e907b6488f019a6f0bb0634aa0f81da"
 dependencies = [
  "ahash",
  "backtrace",
@@ -728,8 +726,7 @@ dependencies = [
 [[package]]
 name = "libafl_derive"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c566e831be2d55db7938ee506f8a9cfac7d9b65a8ca58c3c1ac2795b0a0bfbf"
+source = "git+https://github.com/AFLplusplus/LibAFL.git?tag=0.13.1#bb579e624e907b6488f019a6f0bb0634aa0f81da"
 dependencies = [
  "quote",
  "syn 2.0.71",
@@ -738,8 +735,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9e2ba39a2193fa728f87a20fd96353a47ff737e8121d8ce1714d74a4f21378a"
+source = "git+https://github.com/AFLplusplus/LibAFL.git?tag=0.13.1#bb579e624e907b6488f019a6f0bb0634aa0f81da"
 dependencies = [
  "addr2line 0.23.0",
  "bindgen",
@@ -779,8 +775,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu_build"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d9a5fba7df07b1d67bf78dd2d7014f8e7a8585d87898fb499b9a15d1f58a277"
+source = "git+https://github.com/AFLplusplus/LibAFL.git?tag=0.13.1#bb579e624e907b6488f019a6f0bb0634aa0f81da"
 dependencies = [
  "bindgen",
  "cc",
@@ -796,8 +791,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu_sys"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65e861dde713271340b8859a043a69cbd69dd8ed75262b3200a4fd44fe2a84bb"
+source = "git+https://github.com/AFLplusplus/LibAFL.git?tag=0.13.1#bb579e624e907b6488f019a6f0bb0634aa0f81da"
 dependencies = [
  "libafl_qemu_build",
  "libc",
@@ -811,8 +805,7 @@ dependencies = [
 [[package]]
 name = "libafl_targets"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d0e07f5f7fcae18ec1143762c832e3c900c7f6d0f96d62c21e7517245344951"
+source = "git+https://github.com/AFLplusplus/LibAFL.git?tag=0.13.1#bb579e624e907b6488f019a6f0bb0634aa0f81da"
 dependencies = [
  "bindgen",
  "cc",
