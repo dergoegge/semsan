@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use libafl::{executors::ExitKind, inputs::UsesInput, observers::Observer};
 use libafl_bolts::{ownedref::OwnedMutSlice, AsSlice, AsSliceMut, Named};
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ShMemDifferentialValueObserver<'a> {
     name: Cow<'static, str>,
     last_value: Vec<u8>,

@@ -42,7 +42,7 @@ use libafl_bolts::{
 #[cfg(feature = "qemu")]
 use libafl_qemu::{
     edges::QemuEdgeCoverageClassicHelper, elf::EasyElf, ArchExtras, CallingConvention, GuestAddr,
-    GuestReg, MmapPerms, Qemu, QemuExecutor, QemuHooks, Regs,
+    GuestReg, MmapPerms, Qemu, QemuForkExecutor, QemuHooks, Regs,
 };
 
 use corpus_syncer::CorpusSyncer;
@@ -384,13 +384,14 @@ fn main() -> std::process::ExitCode {
             let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
 
             #[cfg(feature = "qemu")]
-            let secondary_executor = QemuExecutor::new(
+            let secondary_executor = QemuForkExecutor::new(
                 &mut hooks,
                 &mut secondary_qemu_harness,
                 tuple_list!(secondary_map_observer, secondary_diff_value_observer),
                 &mut fuzzer,
                 &mut state,
                 &mut mgr,
+                shmem_provider,
                 Duration::from_millis(opts.timeout),
             )
             .unwrap();
@@ -467,13 +468,14 @@ fn main() -> std::process::ExitCode {
             let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
 
             #[cfg(feature = "qemu")]
-            let secondary_executor = QemuExecutor::new(
+            let secondary_executor = QemuForkExecutor::new(
                 &mut hooks,
                 &mut secondary_qemu_harness,
                 tuple_list!(secondary_map_observer, secondary_diff_value_observer),
                 &mut fuzzer,
                 &mut state,
                 &mut mgr,
+                shmem_provider,
                 Duration::from_millis(opts.timeout),
             )
             .unwrap();
