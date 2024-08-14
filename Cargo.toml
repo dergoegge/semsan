@@ -16,9 +16,9 @@ qemu_arm = ["qemu", "libafl_qemu/arm", "dep:libafl_qemu"]
 
 [dependencies]
 clap = { version = "4.3.0", features = ["derive", "string"] }
-libafl = { git = "https://github.com/AFLplusplus/LibAFL.git", tag = "0.13.1" }
-libafl_bolts = { git = "https://github.com/AFLplusplus/LibAFL.git", tag = "0.13.1" }
-libafl_qemu = { git = "https://github.com/AFLplusplus/LibAFL.git", tag = "0.13.1", features = ["usermode"], optional = true }
+libafl = { git = "https://github.com/dergoegge/LibAFL.git", branch = "semsan" }
+libafl_bolts = { git = "https://github.com/dergoegge/LibAFL.git", branch = "semsan" }
+libafl_qemu = { git = "https://github.com/dergoegge/LibAFL.git", branch = "semsan", features = ["usermode"], optional = true }
 libc = "0.2.155"
 serde = "1.0.200"
 

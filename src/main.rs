@@ -14,9 +14,10 @@ use libafl::{
     corpus::{Corpus, HasTestcase, InMemoryCorpus, OnDiskCorpus, Testcase},
     events::{ProgressReporter, SimpleEventManager},
     executors::{DiffExecutor, ExitKind, ForkserverExecutor},
+    feedback_and, feedback_and_fast, feedback_not, feedback_or,
     feedbacks::{
         differential::{DiffFeedback, DiffResult},
-        MaxMapFeedback,
+        ConstFeedback, DiffExitKindFeedback, MaxMapFeedback,
     },
     inputs::{BytesInput, HasMutatorBytes, HasTargetBytes, Input},
     monitors::SimplePrintingMonitor,
@@ -187,11 +188,8 @@ fn main() -> std::process::ExitCode {
 
     // Both observers are combined into a `DiffFeedback` that compares the retrieved values from
     // the two observers described above.
-    let mut objective = DiffFeedback::new(
-        "diff-value-feedback",
-        &primary_diff_value_observer,
-        &secondary_diff_value_observer,
-        |o1, o2| {
+    let compare_characterization_values =
+        |o1: &ShMemDifferentialValueObserver, o2: &ShMemDifferentialValueObserver| {
             if opts.debug {
                 println!(
                     "Observed characterization values: v1={:?} v2={:?}",
@@ -220,9 +218,39 @@ fn main() -> std::process::ExitCode {
 
                 DiffResult::Diff
             }
-        },
-    )
-    .unwrap();
+        };
+
+    let mut objective = feedback_or!(
+        feedback_and_fast!(
+            ConstFeedback::new(opts.ignore_exit_kind),
+            // Only report differences in the characterization value as behavioral differences.
+            feedback_and!(
+                feedback_not!(DiffExitKindFeedback::new()),
+                DiffFeedback::new(
+                    "diff-value-feedback-0",
+                    &primary_diff_value_observer,
+                    &secondary_diff_value_observer,
+                    compare_characterization_values,
+                )
+                .unwrap()
+            )
+        ),
+        feedback_and_fast!(
+            ConstFeedback::new(!opts.ignore_exit_kind),
+            // Report differences in exit kind or differences in the characterization value as
+            // behavioral differences.
+            feedback_or!(
+                DiffExitKindFeedback::new(),
+                DiffFeedback::new(
+                    "diff-value-feedback-1",
+                    &primary_diff_value_observer,
+                    &secondary_diff_value_observer,
+                    compare_characterization_values,
+                )
+                .unwrap()
+            )
+        )
+    );
 
     let mut primary_coverage_shmem = shmem_provider.new_shmem(MAX_MAP_SIZE).unwrap();
     let mut secondary_coverage_shmem = shmem_provider.new_shmem(MAX_MAP_SIZE).unwrap();
@@ -446,6 +474,7 @@ fn main() -> std::process::ExitCode {
                 }
 
                 if !fuzz_opts.ignore_solutions && state.solutions().count() != 0 {
+                    eprintln!("EXIT: semantic difference found");
                     return std::process::ExitCode::from(opts.solution_exit_code);
                 }
             }

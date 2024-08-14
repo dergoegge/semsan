@@ -137,6 +137,13 @@ pub struct Options {
     )]
     pub shared_args: Vec<String>,
 
+    #[arg(
+        long = "ignore-exit-kind",
+        help = "Don't report differences in exit kind (e.g. crashes or timeouts) as behavioral differences",
+        default_value_t = false
+    )]
+    pub ignore_exit_kind: bool,
+
     #[command(subcommand)]
     pub command: Command,
     #[arg(
