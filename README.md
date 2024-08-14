@@ -71,11 +71,19 @@ Options:
       --timeout <TIMEOUT>
           Maximum amount of time a single input is allowed to run (in milliseconds per executor). [default: 1000]
       --comparator <COMPARATOR>
-          Choose differential value comparator function [default: equal] [possible values: not-equal, equal, less-than, less-than-or-equal, greater-than, greater-than-or-equal]
+          Choose differential value comparator function [default: equal] [possible values: not-equal, equal, less-than, less-than-or-equal, greater-than, greater-than-or-equal, custom]
       --solution-exit-code <SOLUTION_EXIT_CODE>
           Exit code for solutions [default: 71]
       --qemu-entry <QEMU_ENTRY>
           Symbol for the qemu entry breakpoint [default: LLVMFuzzerTestOneInput]
+      --primary-args <PRIMARY_ARGS>
+          Arguments to pass to the primary harness
+      --secondary-args <SECONDARY_ARGS>
+          Arguments to pass to the secondary harness
+      --args <SHARED_ARGS>
+          Arguments to pass to both harnesses
+      --ignore-exit-kind
+          Don't report differences in exit kind (e.g. crashes or timeouts) as behavioral differences
   -h, --help
           Print help
 ```
