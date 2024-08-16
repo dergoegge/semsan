@@ -11,6 +11,13 @@ pub enum Comparator {
     Custom,
 }
 
+#[derive(ValueEnum, Debug, Clone)]
+pub enum Feedback {
+    Coarse,
+    Fine,
+    Coverage,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Differentially fuzz the primary and secondary harness
@@ -50,6 +57,14 @@ pub struct FuzzOptions {
         default_value_t = false
     )]
     pub run_seeds_once: bool,
+
+    #[arg(
+        long = "feedback",
+        help = "Choose feedback mechanism",
+        value_enum,
+        default_value_t = Feedback::Coverage
+    )]
+    pub feedback: Feedback,
 
     #[arg(long = "seeds", help = "Seed corpus directory", required = true)]
     pub seeds: String,

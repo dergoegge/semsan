@@ -1,6 +1,7 @@
 mod corpus_syncer;
 #[macro_use]
 mod dlsym;
+mod feedbacks;
 mod observers;
 mod options;
 
@@ -14,7 +15,7 @@ use libafl::{
     corpus::{Corpus, HasTestcase, InMemoryCorpus, OnDiskCorpus, Testcase},
     events::{ProgressReporter, SimpleEventManager},
     executors::{DiffExecutor, ExitKind, ForkserverExecutor},
-    feedback_and, feedback_and_fast, feedback_not, feedback_or,
+    feedback_and, feedback_and_fast, feedback_not, feedback_or, feedback_or_fast,
     feedbacks::{
         differential::{DiffFeedback, DiffResult},
         ConstFeedback, DiffExitKindFeedback, MaxMapFeedback,
@@ -25,11 +26,10 @@ use libafl::{
         havoc_mutations, havoc_mutations_no_crossover, StdMOptMutator, StdScheduledMutator,
     },
     observers::{CanTrack, HitcountsIterableMapObserver, MultiMapObserver, StdMapObserver},
-    schedulers::{
-        powersched::{PowerQueueScheduler, PowerSchedule},
-        IndexesLenTimeMinimizerScheduler, QueueScheduler,
+    schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler},
+    stages::{
+        CalibrationStage, StdMutationalStage, StdPowerMutationalStage, StdTMinMutationalStage,
     },
-    stages::{CalibrationStage, StdPowerMutationalStage, StdTMinMutationalStage},
     state::{HasCorpus, HasSolutions, StdState},
     Fuzzer, StdFuzzer,
 };
@@ -50,7 +50,10 @@ use libafl_qemu::{
 
 use corpus_syncer::CorpusSyncer;
 use dlsym::DlSym;
-use observers::ShMemDifferentialValueObserver;
+use feedbacks::UniqueTupleFeedback;
+use observers::{
+    CoarsePathDiversityObserver, FinePathDiversityObserver, ShMemDifferentialValueObserver,
+};
 use options::{Command, Comparator, Options};
 
 const CHARACTERIZATION_SHMEM_ID_ENV: &str = "SEMSAN_CHARACTERIZATION_SHMEM_ID";
@@ -105,7 +108,6 @@ fn main() -> std::process::ExitCode {
     let opts = Options::parse();
 
     const MAX_MAP_SIZE: usize = 2_621_440;
-    #[cfg(feature = "qemu")]
     const QEMU_MAP_SIZE: usize = 65_535;
 
     std::env::set_var("AFL_MAP_SIZE", format!("{}", MAX_MAP_SIZE));
@@ -255,6 +257,7 @@ fn main() -> std::process::ExitCode {
     );
 
     let mut primary_coverage_shmem = shmem_provider.new_shmem(MAX_MAP_SIZE).unwrap();
+    // TODO qemu map size
     let mut secondary_coverage_shmem = shmem_provider.new_shmem(MAX_MAP_SIZE).unwrap();
     let (primary_edges, secondary_edges) = unsafe {
         (
@@ -367,29 +370,30 @@ fn main() -> std::process::ExitCode {
 
     match &opts.command {
         Command::Fuzz(fuzz_opts) => {
+            // Resize the coverage maps according to the dynamic map size determined by the executors
+            let primary_map_size = primary_executor.coverage_map_size().unwrap();
+            let mut secondary_map_size = 0;
+
+            #[cfg(feature = "qemu")]
+            if !fuzz_opts.no_secondary_coverage {
+                secondary_map_size = QEMU_MAP_SIZE;
+            };
+            #[cfg(not(feature = "qemu"))]
+            if !fuzz_opts.no_secondary_coverage {
+                secondary_map_size = secondary_executor.coverage_map_size().unwrap();
+            };
+
             let mut coverage_maps: Vec<OwnedMutSlice<'_, u8>> = unsafe {
                 vec![
-                    OwnedMutSlice::from_raw_parts_mut(primary_edges.0, primary_edges.1),
-                    OwnedMutSlice::from_raw_parts_mut(secondary_edges.0, secondary_edges.1),
+                    OwnedMutSlice::from_raw_parts_mut(primary_edges.0, primary_map_size),
+                    OwnedMutSlice::from_raw_parts_mut(secondary_edges.0, secondary_map_size),
                 ]
             };
 
-            // Resize the coverage maps according to the dynamic map size determined by the executors
-            coverage_maps[0].truncate(primary_executor.coverage_map_size().unwrap());
             println!(
                 "Truncated primary coverage map to {} bytes",
                 coverage_maps[0].len()
             );
-
-            #[cfg(feature = "qemu")]
-            if !fuzz_opts.no_secondary_coverage {
-                coverage_maps[1].truncate(QEMU_MAP_SIZE);
-            };
-            #[cfg(not(feature = "qemu"))]
-            if !fuzz_opts.no_secondary_coverage {
-                coverage_maps[1].truncate(secondary_executor.coverage_map_size().unwrap());
-            };
-
             if fuzz_opts.no_secondary_coverage {
                 println!("Ignoring coverage feedback for the secondary executor!");
                 coverage_maps[1].truncate(0);
@@ -405,9 +409,40 @@ fn main() -> std::process::ExitCode {
                 MultiMapObserver::differential("combined-coverage", coverage_maps),
             )
             .track_indices();
-            let mut coverage_feedback = MaxMapFeedback::new(&diff_map_observer);
+            let mut coarse_diversity =
+                CoarsePathDiversityObserver::new("coarse-observer", unsafe {
+                    vec![
+                        OwnedMutSlice::from_raw_parts_mut(primary_edges.0, primary_map_size),
+                        OwnedMutSlice::from_raw_parts_mut(secondary_edges.0, secondary_map_size),
+                    ]
+                });
+            let mut fine_diversity = FinePathDiversityObserver::new("fine-observer", unsafe {
+                vec![
+                    OwnedMutSlice::from_raw_parts_mut(primary_edges.0, primary_map_size),
+                    OwnedMutSlice::from_raw_parts_mut(secondary_edges.0, secondary_map_size),
+                ]
+            });
 
-            let calibration_stage = CalibrationStage::new(&coverage_feedback);
+            let (coverage, coarse, fine) = match fuzz_opts.feedback {
+                options::Feedback::Fine => (false, false, true),
+                options::Feedback::Coarse => (false, true, false),
+                options::Feedback::Coverage => (true, false, false),
+            };
+
+            let mut coverage_feedback = feedback_or!(
+                feedback_and_fast!(
+                    ConstFeedback::new(coverage),
+                    MaxMapFeedback::new(&diff_map_observer)
+                ),
+                feedback_and_fast!(
+                    ConstFeedback::new(coarse),
+                    UniqueTupleFeedback::new(&coarse_diversity)
+                ),
+                feedback_and_fast!(
+                    ConstFeedback::new(fine),
+                    UniqueTupleFeedback::new(&fine_diversity)
+                ),
+            );
 
             let mut state = StdState::new(
                 StdRand::with_seed(libafl_bolts::current_nanos()),
@@ -418,10 +453,7 @@ fn main() -> std::process::ExitCode {
             )
             .unwrap();
 
-            let scheduler = IndexesLenTimeMinimizerScheduler::new(
-                &diff_map_observer,
-                PowerQueueScheduler::new(&mut state, &diff_map_observer, PowerSchedule::FAST),
-            );
+            let scheduler = QueueScheduler::new();
             let mut fuzzer = StdFuzzer::new(scheduler, coverage_feedback, objective);
 
             let mut mgr = SimpleEventManager::new(SimplePrintingMonitor::new());
@@ -443,7 +475,7 @@ fn main() -> std::process::ExitCode {
             let mut executor = DiffExecutor::new(
                 primary_executor,
                 secondary_executor,
-                tuple_list!(diff_map_observer),
+                tuple_list!(diff_map_observer, coarse_diversity, fine_diversity),
             );
 
             let mut corpus_syncer =
@@ -467,9 +499,10 @@ fn main() -> std::process::ExitCode {
                 return std::process::ExitCode::SUCCESS;
             }
 
-            let mutator = StdMOptMutator::new(&mut state, havoc_mutations(), 7, 5).unwrap();
+            let mutator =
+                StdMOptMutator::new(&mut state, havoc_mutations::<BytesInput>(), 7, 5).unwrap();
 
-            let mut stages = tuple_list!(calibration_stage, StdPowerMutationalStage::new(mutator));
+            let mut stages = tuple_list!(StdMutationalStage::new(mutator));
 
             loop {
                 mgr.maybe_report_progress(&mut state, std::time::Duration::from_secs(15))
