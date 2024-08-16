@@ -42,8 +42,10 @@ use libafl_bolts::{
 };
 #[cfg(feature = "qemu")]
 use libafl_qemu::{
-    edges::QemuEdgeCoverageClassicHelper, elf::EasyElf, ArchExtras, CallingConvention, GuestAddr,
-    GuestReg, MmapPerms, Qemu, QemuForkExecutor, QemuHooks, Regs,
+    edges::{QemuEdgeCoverageClassicHelper, EDGES_MAP_PTR},
+    elf::EasyElf,
+    ArchExtras, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu, QemuForkExecutor,
+    QemuHooks, Regs,
 };
 
 use corpus_syncer::CorpusSyncer;
@@ -254,24 +256,30 @@ fn main() -> std::process::ExitCode {
 
     let mut primary_coverage_shmem = shmem_provider.new_shmem(MAX_MAP_SIZE).unwrap();
     let mut secondary_coverage_shmem = shmem_provider.new_shmem(MAX_MAP_SIZE).unwrap();
-    let mut coverage_maps: Vec<OwnedMutSlice<'_, u8>> = unsafe {
-        vec![
-            OwnedMutSlice::from_raw_parts_mut(
+    let (primary_edges, secondary_edges) = unsafe {
+        (
+            (
                 primary_coverage_shmem.as_mut_ptr_of().unwrap(),
                 primary_coverage_shmem.len(),
             ),
-            OwnedMutSlice::from_raw_parts_mut(
+            (
                 secondary_coverage_shmem.as_mut_ptr_of().unwrap(),
                 secondary_coverage_shmem.len(),
             ),
-        ]
+        )
     };
 
     // Create a coverage map observer for each executor
     let primary_map_observer =
-        StdMapObserver::from_mut_slice("cov-observer-1", coverage_maps[0].clone());
-    let secondary_map_observer =
-        StdMapObserver::from_mut_slice("cov-observer-2", coverage_maps[1].clone());
+        unsafe { StdMapObserver::from_mut_ptr("cov-observer-1", primary_edges.0, primary_edges.1) };
+    let secondary_map_observer = unsafe {
+        StdMapObserver::from_mut_ptr("cov-observer-2", secondary_edges.0, secondary_edges.1)
+    };
+
+    #[cfg(feature = "qemu")]
+    unsafe {
+        EDGES_MAP_PTR = secondary_edges.0
+    };
 
     let primary_executor = ForkserverExecutor::builder()
         .program(PathBuf::from(&opts.primary))
@@ -359,6 +367,13 @@ fn main() -> std::process::ExitCode {
 
     match &opts.command {
         Command::Fuzz(fuzz_opts) => {
+            let mut coverage_maps: Vec<OwnedMutSlice<'_, u8>> = unsafe {
+                vec![
+                    OwnedMutSlice::from_raw_parts_mut(primary_edges.0, primary_edges.1),
+                    OwnedMutSlice::from_raw_parts_mut(secondary_edges.0, secondary_edges.1),
+                ]
+            };
+
             // Resize the coverage maps according to the dynamic map size determined by the executors
             coverage_maps[0].truncate(primary_executor.coverage_map_size().unwrap());
             println!(
