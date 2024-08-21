@@ -136,10 +136,29 @@ Options:
 By default SemSan will check for equality when comparing the observed output
 values but that is configurable with the `--comparator` option. Currently, the
 only supported comparators are `not-equal`, `equal`, `less-than`,
-`less-than-or-equal`, `greater-than` and `greater-than-or-equal`.
+`less-than-or-equal`, `greater-than`, `greater-than-or-equal` and `custom`.
 
 Using comparators other than `equal` can be useful when the harnesses under
 test are allowed to behave differently to some extend.
+
+Custom comparators allow the user to provide their own comparison function by
+`LD_PRELOAD`ing a library. The custom comparator function should be defined as
+a function called `semsan_custom_comparator` which should return `false` if the
+output values indicate a solution.
+
+```C
+bool semsan_custom_comparator(const uint8_t *o1, size_t o1_len,
+                              const uint8_t *o2, size_t o2_len) {
+  // Custom comparator logic ...
+}
+```
+
+Example usage:
+
+```
+LD_PRELOAD=$PWD/custom_comp.so semsan <primary> <secondary> --comparator custom fuzz \
+  --seeds <seeds> --solutions <solutions>
+```
 
 ### Ensembling with other engines
 
