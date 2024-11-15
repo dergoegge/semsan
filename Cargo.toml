@@ -9,16 +9,17 @@ qemu = []
 qemu_be = ["qemu", "libafl_qemu/be", "dep:libafl_qemu"]
 # These are mutually exclusive: SemSan can only be compiled to support one
 # libafl_qemu architecture at a time.
-qemu_x86_64 = ["qemu", "libafl_qemu/x86_64", "dep:libafl_qemu"]   # amd64
-qemu_aarch64 = ["qemu", "libafl_qemu/aarch64", "dep:libafl_qemu"] # arm64
-qemu_i386 = ["qemu", "libafl_qemu/i386", "dep:libafl_qemu"]
-qemu_arm = ["qemu", "libafl_qemu/arm", "dep:libafl_qemu"]
+qemu_x86_64 = ["qemu", "libafl_qemu/x86_64", "dep:libafl_qemu", "dep:libafl_targets"]   # amd64
+qemu_aarch64 = ["qemu", "libafl_qemu/aarch64", "dep:libafl_qemu", "dep:libafl_targets"] # arm64
+qemu_i386 = ["qemu", "libafl_qemu/i386", "dep:libafl_qemu", "dep:libafl_targets"]
+qemu_arm = ["qemu", "libafl_qemu/arm", "dep:libafl_qemu", "dep:libafl_targets"]
 
 [dependencies]
 clap = { version = "4.3.0", features = ["derive", "string"] }
-libafl = { git = "https://github.com/dergoegge/LibAFL.git", branch = "semsan" }
-libafl_bolts = { git = "https://github.com/dergoegge/LibAFL.git", branch = "semsan" }
-libafl_qemu = { git = "https://github.com/dergoegge/LibAFL.git", branch = "semsan", features = ["usermode"], optional = true }
+libafl = { git = "https://github.com/AFLplusplus/LibAFL.git", tag = "0.14.0" }
+libafl_bolts = { git = "https://github.com/AFLplusplus/LibAFL.git", tag = "0.14.0" }
+libafl_targets = { git = "https://github.com/AFLplusplus/LibAFL.git", tag = "0.14.0", optional = true }
+libafl_qemu = { git = "https://github.com/AFLplusplus/LibAFL.git", tag = "0.14.0", features = ["usermode"], optional = true }
 libc = "0.2.155"
 serde = "1.0.200"
 

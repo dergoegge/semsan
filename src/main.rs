@@ -8,6 +8,7 @@ use clap::Parser;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::ptr::NonNull;
 use std::time::Duration;
 
 use libafl::{
@@ -24,7 +25,9 @@ use libafl::{
     mutators::{
         havoc_mutations, havoc_mutations_no_crossover, StdMOptMutator, StdScheduledMutator,
     },
-    observers::{CanTrack, HitcountsIterableMapObserver, MultiMapObserver, StdMapObserver},
+    observers::{
+        CanTrack, ConstMapObserver, HitcountsIterableMapObserver, MultiMapObserver, StdMapObserver,
+    },
     schedulers::{
         powersched::{PowerQueueScheduler, PowerSchedule},
         IndexesLenTimeMinimizerScheduler, QueueScheduler,
@@ -42,11 +45,11 @@ use libafl_bolts::{
 };
 #[cfg(feature = "qemu")]
 use libafl_qemu::{
-    edges::{QemuEdgeCoverageClassicHelper, EDGES_MAP_PTR},
-    elf::EasyElf,
-    ArchExtras, CallingConvention, GuestAddr, GuestReg, MmapPerms, Qemu, QemuForkExecutor,
-    QemuHooks, Regs,
+    elf::EasyElf, modules::edges::StdEdgeCoverageClassicModule, ArchExtras, CallingConvention,
+    Emulator, GuestAddr, GuestReg, MmapPerms, Qemu, QemuForkExecutor, Regs,
 };
+#[cfg(feature = "qemu")]
+use libafl_targets::EDGES_MAP_PTR;
 
 use corpus_syncer::CorpusSyncer;
 use dlsym::DlSym;
@@ -62,15 +65,13 @@ fn setup_qemu(
     entry: &str,
     qemu_binary: &str,
     args: Vec<String>,
-) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr) {
+) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr, GuestAddr) {
+    std::env::remove_var("LD_LIBRARY_PATH");
+
     let mut qemu_args = vec![String::from("semsan"), String::from(qemu_binary)];
     qemu_args.extend(args);
 
-    // Setup QEMU
-    let mut env: HashMap<String, String> = std::env::vars().collect();
-    env.remove("LD_LIBRARY_PATH");
-    let env: Vec<(String, String)> = env.drain().collect();
-    let emu = Qemu::init(qemu_args.as_slice(), env.as_slice()).unwrap();
+    let emu = Qemu::init(qemu_args.as_slice()).unwrap();
 
     let mut elf_buffer = Vec::new();
     let elf = EasyElf::from_file(emu.binary_path(), &mut elf_buffer).unwrap();
@@ -98,7 +99,7 @@ fn setup_qemu(
         .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
         .unwrap();
 
-    (emu, pc, stack_ptr, ret_addr, input_addr)
+    (emu, pc, stack_ptr, ret_addr, input_addr, test_one_input_ptr)
 }
 
 fn main() -> std::process::ExitCode {
@@ -144,7 +145,7 @@ fn main() -> std::process::ExitCode {
     secondary_args.extend(opts.shared_args.clone());
 
     #[cfg(feature = "qemu")]
-    let (emulator, pc, stack_ptr, ret_addr, input_addr) =
+    let (qemu, pc, stack_ptr, ret_addr, input_addr, test_one_input_ptr) =
         setup_qemu(&opts.qemu_entry, &opts.secondary, secondary_args.clone());
 
     #[cfg(feature = "qemu")]
@@ -256,7 +257,7 @@ fn main() -> std::process::ExitCode {
 
     let mut primary_coverage_shmem = shmem_provider.new_shmem(MAX_MAP_SIZE).unwrap();
     let mut secondary_coverage_shmem = shmem_provider.new_shmem(MAX_MAP_SIZE).unwrap();
-    let (primary_edges, secondary_edges) = unsafe {
+    let (primary_edges, secondary_edges) = {
         (
             (
                 primary_coverage_shmem.as_mut_ptr_of().unwrap(),
@@ -272,8 +273,18 @@ fn main() -> std::process::ExitCode {
     // Create a coverage map observer for each executor
     let primary_map_observer =
         unsafe { StdMapObserver::from_mut_ptr("cov-observer-1", primary_edges.0, primary_edges.1) };
+    #[cfg(not(feature = "qemu"))]
     let secondary_map_observer = unsafe {
         StdMapObserver::from_mut_ptr("cov-observer-2", secondary_edges.0, secondary_edges.1)
+    };
+    #[cfg(feature = "qemu")]
+    let mut secondary_map_observer = unsafe {
+        ConstMapObserver::from_mut_ptr(
+            "cov-observer-2",
+            NonNull::new(secondary_edges.0)
+                .expect("secondary map ptr is null.")
+                .cast::<[u8; QEMU_MAP_SIZE]>(),
+        )
     };
 
     #[cfg(feature = "qemu")]
@@ -329,7 +340,8 @@ fn main() -> std::process::ExitCode {
         .unwrap();
 
     #[cfg(feature = "qemu")]
-    let mut secondary_qemu_harness = |input: &BytesInput| {
+    let mut secondary_qemu_harness = |_emulator: &mut Emulator<_, _, _, _, _>,
+                                      input: &BytesInput| {
         let target = input.target_bytes();
         let mut buf = target.as_slice();
         let mut len = buf.len();
@@ -337,33 +349,36 @@ fn main() -> std::process::ExitCode {
             buf = &buf[0..MAX_INPUT_SIZE];
             len = MAX_INPUT_SIZE;
         }
-        let len = len as GuestReg;
 
         unsafe {
-            emulator.write_mem(input_addr, buf);
-            emulator.write_reg(Regs::Pc, pc).unwrap();
-            emulator.write_reg(Regs::Sp, stack_ptr).unwrap();
-            emulator.write_return_address(ret_addr).unwrap();
-            emulator
-                .write_function_argument(CallingConvention::Cdecl, 0, input_addr)
-                .unwrap();
-            emulator
-                .write_function_argument(CallingConvention::Cdecl, 1, len)
-                .unwrap();
-            // TODO handle emulation results? siwtch to QemuForkExecutor to warn about exit(_)
-            // usage in the target
-            let _ = emulator.run();
+            // # Safety
+            // The input buffer size is checked above. We use `write_mem_unchecked` for performance reasons
+            // For better error handling, use `write_mem` and handle the returned Result
+            qemu.write_mem_unchecked(input_addr, buf);
+
+            qemu.write_reg(Regs::Rdi, input_addr).unwrap();
+            qemu.write_reg(Regs::Rsi, len as GuestReg).unwrap();
+            qemu.write_reg(Regs::Rip, test_one_input_ptr).unwrap();
+            qemu.write_reg(Regs::Rsp, stack_ptr).unwrap();
+
+            let _ = qemu.run();
         }
 
         ExitKind::Ok
     };
 
     #[cfg(feature = "qemu")]
-    let mut hooks = QemuHooks::new(
-        emulator.clone(),
-        // TODO: The classic helper is needed for StdMapObserver.
-        tuple_list!(QemuEdgeCoverageClassicHelper::default(),),
-    );
+    let modules = tuple_list!(StdEdgeCoverageClassicModule::builder()
+        .const_map_observer(secondary_map_observer.as_mut())
+        .build()
+        .unwrap(),);
+
+    #[cfg(feature = "qemu")]
+    let emulator = Emulator::empty()
+        .qemu(qemu)
+        .modules(modules)
+        .build()
+        .unwrap();
 
     match &opts.command {
         Command::Fuzz(fuzz_opts) => {
@@ -420,7 +435,7 @@ fn main() -> std::process::ExitCode {
 
             let scheduler = IndexesLenTimeMinimizerScheduler::new(
                 &diff_map_observer,
-                PowerQueueScheduler::new(&mut state, &diff_map_observer, PowerSchedule::FAST),
+                PowerQueueScheduler::new(&mut state, &diff_map_observer, PowerSchedule::fast()),
             );
             let mut fuzzer = StdFuzzer::new(scheduler, coverage_feedback, objective);
 
@@ -428,7 +443,7 @@ fn main() -> std::process::ExitCode {
 
             #[cfg(feature = "qemu")]
             let secondary_executor = QemuForkExecutor::new(
-                &mut hooks,
+                emulator,
                 &mut secondary_qemu_harness,
                 tuple_list!(secondary_map_observer, secondary_diff_value_observer),
                 &mut fuzzer,
@@ -467,9 +482,12 @@ fn main() -> std::process::ExitCode {
                 return std::process::ExitCode::SUCCESS;
             }
 
-            let mutator = StdMOptMutator::new(&mut state, havoc_mutations(), 7, 5).unwrap();
+            let mutator =
+                StdMOptMutator::new::<BytesInput, _>(&mut state, havoc_mutations(), 7, 5).unwrap();
 
-            let mut stages = tuple_list!(calibration_stage, StdPowerMutationalStage::new(mutator));
+            let power_mut_stage: StdPowerMutationalStage<_, _, BytesInput, _, _> =
+                StdPowerMutationalStage::new(mutator);
+            let mut stages = tuple_list!(calibration_stage, power_mut_stage);
 
             loop {
                 mgr.maybe_report_progress(&mut state, std::time::Duration::from_secs(15))
@@ -513,7 +531,7 @@ fn main() -> std::process::ExitCode {
 
             #[cfg(feature = "qemu")]
             let secondary_executor = QemuForkExecutor::new(
-                &mut hooks,
+                emulator,
                 &mut secondary_qemu_harness,
                 tuple_list!(secondary_map_observer, secondary_diff_value_observer),
                 &mut fuzzer,

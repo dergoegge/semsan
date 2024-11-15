@@ -31,15 +31,11 @@ impl Named for ShMemDifferentialValueObserver<'_> {
     }
 }
 
-impl<S> Observer<S> for ShMemDifferentialValueObserver<'_>
+impl<I, S> Observer<I, S> for ShMemDifferentialValueObserver<'_>
 where
     S: UsesInput,
 {
-    fn pre_exec(
-        &mut self,
-        _state: &mut S,
-        _input: &<S as UsesInput>::Input,
-    ) -> Result<(), libafl::prelude::Error> {
+    fn pre_exec(&mut self, _state: &mut S, _input: &I) -> Result<(), libafl_bolts::Error> {
         // Reset the differential value before executing the harness
         self.shmem.as_mut().unwrap().as_slice_mut().fill(0);
         Ok(())
@@ -48,7 +44,7 @@ where
     fn post_exec(
         &mut self,
         _state: &mut S,
-        _input: &S::Input,
+        _input: &I,
         _exit_kind: &ExitKind,
     ) -> Result<(), libafl_bolts::Error> {
         // Record the differential value after executing the harness
