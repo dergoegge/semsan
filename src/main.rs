@@ -87,13 +87,7 @@ fn setup_qemu(
     let stack_ptr: GuestAddr = emu.read_reg(Regs::Sp).unwrap();
     let ret_addr: GuestAddr = emu.read_return_address().unwrap();
 
-    let mut breakpoint = ret_addr;
-    #[cfg(feature = "qemu_arm")]
-    if breakpoint & 1 == 1 {
-        // Arm32 thumb state detected, subtract one for the breakpoint
-        breakpoint -= 1;
-    }
-    emu.set_breakpoint(breakpoint);
+    emu.set_breakpoint(ret_addr);
 
     let input_addr = emu
         .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
