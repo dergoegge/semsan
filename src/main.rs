@@ -344,17 +344,18 @@ fn main() -> std::process::ExitCode {
             len = MAX_INPUT_SIZE;
         }
 
+        let len = len as GuestReg;
+
+        qemu.write_mem(input_addr, buf).unwrap();
+        qemu.write_reg(Regs::Pc, pc).unwrap();
+        qemu.write_reg(Regs::Sp, stack_ptr).unwrap();
+        qemu.write_return_address(ret_addr).unwrap();
+        qemu.write_function_argument(CallingConvention::Cdecl, 0, input_addr)
+            .unwrap();
+        qemu.write_function_argument(CallingConvention::Cdecl, 1, len)
+            .unwrap();
+
         unsafe {
-            // # Safety
-            // The input buffer size is checked above. We use `write_mem_unchecked` for performance reasons
-            // For better error handling, use `write_mem` and handle the returned Result
-            qemu.write_mem_unchecked(input_addr, buf);
-
-            qemu.write_reg(Regs::Rdi, input_addr).unwrap();
-            qemu.write_reg(Regs::Rsi, len as GuestReg).unwrap();
-            qemu.write_reg(Regs::Rip, test_one_input_ptr).unwrap();
-            qemu.write_reg(Regs::Rsp, stack_ptr).unwrap();
-
             let _ = qemu.run();
         }
 
