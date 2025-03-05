@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use libafl::{executors::ExitKind, inputs::UsesInput, observers::Observer};
+use libafl::{executors::ExitKind, observers::Observer};
 use libafl_bolts::{ownedref::OwnedMutSlice, AsSlice, AsSliceMut, Named};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -31,10 +31,7 @@ impl Named for ShMemDifferentialValueObserver<'_> {
     }
 }
 
-impl<I, S> Observer<I, S> for ShMemDifferentialValueObserver<'_>
-where
-    S: UsesInput,
-{
+impl<I, S> Observer<I, S> for ShMemDifferentialValueObserver<'_> {
     fn pre_exec(&mut self, _state: &mut S, _input: &I) -> Result<(), libafl_bolts::Error> {
         // Reset the differential value before executing the harness
         self.shmem.as_mut().unwrap().as_slice_mut().fill(0);

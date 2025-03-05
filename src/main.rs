@@ -61,18 +61,7 @@ const MAX_CHARACTERIZATION_SHMEM_SIZE: usize = 32;
 const MAX_INPUT_SIZE: usize = 1_048_576;
 
 #[cfg(feature = "qemu")]
-fn setup_qemu(
-    entry: &str,
-    qemu_binary: &str,
-    args: Vec<String>,
-) -> (Qemu, GuestReg, GuestAddr, GuestAddr, GuestAddr, GuestAddr) {
-    std::env::remove_var("LD_LIBRARY_PATH");
-
-    let mut qemu_args = vec![String::from("semsan"), String::from(qemu_binary)];
-    qemu_args.extend(args);
-
-    let emu = Qemu::init(qemu_args.as_slice()).unwrap();
-
+fn setup_qemu(entry: &str, emu: &Qemu) -> (GuestReg, GuestAddr, GuestAddr, GuestAddr) {
     let mut elf_buffer = Vec::new();
     let elf = EasyElf::from_file(emu.binary_path(), &mut elf_buffer).unwrap();
 
@@ -93,7 +82,7 @@ fn setup_qemu(
         .map_private(0, MAX_INPUT_SIZE, MmapPerms::ReadWrite)
         .unwrap();
 
-    (emu, pc, stack_ptr, ret_addr, input_addr, test_one_input_ptr)
+    (pc, stack_ptr, ret_addr, input_addr)
 }
 
 fn main() -> std::process::ExitCode {
@@ -137,18 +126,6 @@ fn main() -> std::process::ExitCode {
 
     primary_args.extend(opts.shared_args.clone());
     secondary_args.extend(opts.shared_args.clone());
-
-    #[cfg(feature = "qemu")]
-    let (qemu, pc, stack_ptr, ret_addr, input_addr, test_one_input_ptr) =
-        setup_qemu(&opts.qemu_entry, &opts.secondary, secondary_args.clone());
-
-    #[cfg(feature = "qemu")]
-    if opts.debug {
-        println!(
-            "Successfully setup qemu: pc={:?} stack_ptr={:?} ret_addr={:?} input_addr={:?}",
-            pc, stack_ptr, ret_addr, input_addr
-        );
-    }
 
     dlsym! { fn semsan_custom_comparator(*const u8, usize, *const u8, usize) -> bool }
     let custom_comparator = semsan_custom_comparator.get();
@@ -334,7 +311,39 @@ fn main() -> std::process::ExitCode {
         .unwrap();
 
     #[cfg(feature = "qemu")]
-    let mut secondary_qemu_harness = |_emulator: &mut Emulator<_, _, _, _, _>,
+    let (emulator, qemu) = {
+        let modules = tuple_list!(StdEdgeCoverageClassicModule::builder()
+            .const_map_observer(secondary_map_observer.as_mut())
+            .build()
+            .unwrap(),);
+
+        std::env::remove_var("LD_LIBRARY_PATH");
+        let mut qemu_args = vec![String::from("semsan"), String::from(&opts.secondary)];
+        qemu_args.extend(secondary_args);
+
+        let emu = Emulator::empty()
+            .qemu_parameters(qemu_args)
+            .modules(modules)
+            .build()
+            .unwrap();
+        let qemu = emu.qemu();
+
+        (emu, qemu)
+    };
+
+    #[cfg(feature = "qemu")]
+    let (pc, stack_ptr, ret_addr, input_addr) = setup_qemu(&opts.qemu_entry, &qemu);
+
+    #[cfg(feature = "qemu")]
+    if opts.debug {
+        println!(
+            "Successfully setup qemu: pc={:?} stack_ptr={:?} ret_addr={:?} input_addr={:?}",
+            pc, stack_ptr, ret_addr, input_addr
+        );
+    }
+
+    #[cfg(feature = "qemu")]
+    let mut secondary_qemu_harness = |_emulator: &mut Emulator<_, _, _, _, _, _, _>,
                                       input: &BytesInput| {
         let target = input.target_bytes();
         let mut buf = target.as_slice();
@@ -361,19 +370,6 @@ fn main() -> std::process::ExitCode {
 
         ExitKind::Ok
     };
-
-    #[cfg(feature = "qemu")]
-    let modules = tuple_list!(StdEdgeCoverageClassicModule::builder()
-        .const_map_observer(secondary_map_observer.as_mut())
-        .build()
-        .unwrap(),);
-
-    #[cfg(feature = "qemu")]
-    let emulator = Emulator::empty()
-        .qemu(qemu)
-        .modules(modules)
-        .build()
-        .unwrap();
 
     match &opts.command {
         Command::Fuzz(fuzz_opts) => {
@@ -477,10 +473,9 @@ fn main() -> std::process::ExitCode {
                 return std::process::ExitCode::SUCCESS;
             }
 
-            let mutator =
-                StdMOptMutator::new::<BytesInput, _>(&mut state, havoc_mutations(), 7, 5).unwrap();
+            let mutator = StdMOptMutator::new(&mut state, havoc_mutations(), 7, 5).unwrap();
 
-            let power_mut_stage: StdPowerMutationalStage<_, _, BytesInput, _, _> =
+            let power_mut_stage: StdPowerMutationalStage<_, _, BytesInput, _, _, _> =
                 StdPowerMutationalStage::new(mutator);
             let mut stages = tuple_list!(calibration_stage, power_mut_stage);
 
@@ -542,7 +537,7 @@ fn main() -> std::process::ExitCode {
                 DiffExecutor::new(primary_executor, secondary_executor, tuple_list!());
 
             let input = BytesInput::from_file(PathBuf::from(&min_opts.solution)).unwrap();
-            let size = input.bytes().len();
+            let size = input.target_bytes().len();
             let readable_id = input.generate_name(None);
 
             let id = state.corpus_mut().add(Testcase::new(input)).unwrap();
@@ -559,7 +554,7 @@ fn main() -> std::process::ExitCode {
             let input = testcase
                 .load_input(state.corpus())
                 .unwrap()
-                .bytes()
+                .target_bytes()
                 .to_vec();
             drop(testcase);
 

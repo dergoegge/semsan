@@ -4,28 +4,22 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use libafl::{
-    corpus::Corpus,
-    events::EventFirer,
-    fuzzer::Evaluator,
-    fuzzer::ExecuteInputResult,
-    inputs::Input,
-    state::{HasCorpus, State, UsesState},
+    corpus::Corpus, fuzzer::Evaluator, fuzzer::ExecuteInputResult, inputs::Input, state::HasCorpus,
 };
 
-pub struct CorpusSyncer<E, EM, Z, S> {
+pub struct CorpusSyncer<I, E, EM, Z, S> {
     evaluated: HashSet<String>,
     last_evaluated: Option<Instant>,
     interval: Duration,
 
-    phantom: PhantomData<(E, EM, Z, S)>,
+    phantom: PhantomData<(I, E, EM, Z, S)>,
 }
 
-impl<E, EM, Z, S> CorpusSyncer<E, EM, Z, S>
+impl<I, E, EM, Z, S> CorpusSyncer<I, E, EM, Z, S>
 where
-    S: State + HasCorpus,
-    E: UsesState<State = S>,
-    EM: EventFirer<State = S>,
-    Z: Evaluator<E, EM, State = S>,
+    I: Input,
+    S: HasCorpus<I>,
+    Z: Evaluator<E, EM, I, S>,
 {
     pub fn new(interval: Duration) -> Self {
         Self {
@@ -80,14 +74,14 @@ where
                 continue;
             }
 
-            if let Ok(input) = S::Input::from_file(&path) {
+            if let Ok(input) = I::from_file(&path) {
                 if !self.evaluated.insert(input.generate_name(None)) {
                     // Only evaulate new inputs
                     continue;
                 }
 
                 // Evaluate the input for corpus inclusion
-                match evaluator.evaluate_input(state, executor, manager, input.clone()) {
+                match evaluator.evaluate_input(state, executor, manager, &input) {
                     Ok((ExecuteInputResult::None, _)) => {
                         // The input was not interesting but we'll add it to the corpus as "disabled"
                         // anyway, which will prompt libafl to still use it for splice mutations.
